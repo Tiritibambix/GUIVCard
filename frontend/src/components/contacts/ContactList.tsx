@@ -171,7 +171,6 @@ const ContactList: React.FC = () => {
         }}
         onSave={handleSave}
         contact={selectedContact}
-        loading={operationLoading}
       />
     </div>
   );
