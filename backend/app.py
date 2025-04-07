@@ -41,9 +41,10 @@ try:
     headers = {
         'Authorization': f'Basic {auth_header}',
         'User-Agent': 'GuiVCard/1.0',
-        'Depth': '0'
+        'Depth': '1'
     }
     
+    # Test addressbook access with PROPFIND
     response = requests.request('PROPFIND', CARDDAV_URL, headers=headers)
     logger.info(f"PROPFIND response status: {response.status_code}")
     logger.info(f"Address book response headers: {dict(response.headers)}")
@@ -98,7 +99,7 @@ def health_check():
 @require_auth
 def get_contacts():
     try:
-        logger.debug(f"Creating DAVClient with URL: {CARDDAV_URL}, username: {ADMIN_USERNAME}")
+        logger.debug(f"Creating DAVClient with URL: {CARDDAV_URL}")
         client = caldav.DAVClient(
             url=CARDDAV_URL,
             username=ADMIN_USERNAME,
@@ -107,49 +108,45 @@ def get_contacts():
         )
         logger.info("Successfully created DAVClient")
 
-        logger.debug("Getting principal...")
-        principal = client.principal()
-        logger.info(f"Successfully got principal: {principal}")
+        # Create an AddressBook object directly without using principal
+        address_book = caldav.AddressBook(
+            client=client,
+            url=CARDDAV_URL
+        )
+        logger.info(f"Created AddressBook object for URL: {CARDDAV_URL}")
 
-        logger.debug("Getting addressbooks...")
-        address_books = principal.addressbooks()
-        logger.info(f"Found {len(address_books)} address books")
+        try:
+            logger.debug("Getting all vcards...")
+            cards = list(address_book.get_all_vcards())
+            logger.info(f"Found {len(cards)} contacts in address book")
 
-        if not address_books:
-            logger.warning("No address books found")
-            return jsonify({"message": "No address books found"}), 404
+            contacts = []
+            for card in cards:
+                try:
+                    logger.debug(f"Processing card: {card.id}")
+                    vcard = vobject.readOne(card)
+                    contact = {
+                        "id": card.id,
+                        "fullName": str(vcard.fn.value),
+                        "email": str(vcard.email.value) if hasattr(vcard, 'email') else None,
+                        "phone": str(vcard.tel.value) if hasattr(vcard, 'tel') else None,
+                        "organization": str(vcard.org.value[0]) if hasattr(vcard, 'org') else None,
+                        "title": str(vcard.title.value) if hasattr(vcard, 'title') else None,
+                        "notes": str(vcard.note.value) if hasattr(vcard, 'note') else None,
+                        "lastModified": card.get_etag()
+                    }
+                    contacts.append(contact)
+                    logger.debug(f"Added contact: {contact['fullName']}")
+                except Exception as e:
+                    logger.error(f"Error processing vCard {card.id}: {str(e)}", exc_info=True)
 
-        contacts = []
-        for abook in address_books:
-            logger.info(f"Reading address book: {abook.url}")
-            try:
-                logger.debug("Getting all vcards...")
-                cards = list(abook.get_all_vcards())
-                logger.info(f"Found {len(cards)} contacts in address book")
+            logger.info(f"Retrieved {len(contacts)} contacts total")
+            return jsonify(contacts), 200
 
-                for card in cards:
-                    try:
-                        logger.debug(f"Processing card: {card.id}")
-                        vcard = vobject.readOne(card)
-                        contact = {
-                            "id": card.id,
-                            "fullName": str(vcard.fn.value),
-                            "email": str(vcard.email.value) if hasattr(vcard, 'email') else None,
-                            "phone": str(vcard.tel.value) if hasattr(vcard, 'tel') else None,
-                            "organization": str(vcard.org.value[0]) if hasattr(vcard, 'org') else None,
-                            "title": str(vcard.title.value) if hasattr(vcard, 'title') else None,
-                            "notes": str(vcard.note.value) if hasattr(vcard, 'note') else None,
-                            "lastModified": card.get_etag()
-                        }
-                        contacts.append(contact)
-                        logger.debug(f"Added contact: {contact['fullName']}")
-                    except Exception as e:
-                        logger.error(f"Error processing vCard {card.id}: {str(e)}", exc_info=True)
-            except Exception as e:
-                logger.error(f"Error reading address book {abook.url}: {str(e)}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Error reading address book: {str(e)}", exc_info=True)
+            return jsonify({"error": "Failed to read contacts"}), 500
 
-        logger.info(f"Retrieved {len(contacts)} contacts total")
-        return jsonify(contacts), 200
     except Exception as e:
         error_msg = f"Error getting contacts: {str(e)}"
         logger.error(error_msg, exc_info=True)
