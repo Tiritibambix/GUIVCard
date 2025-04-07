@@ -11,8 +11,8 @@ services:
       # CardDAV server credentials
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      # CORS - Replace YOUR_SERVER_IP with your server's IP or domain name
-      - CORS_ORIGIN=http://YOUR_SERVER_IP:8190
+      # CORS configuration for frontend access
+      - CORS_ORIGIN=http://localhost:8190,http://127.0.0.1:8190
     networks:
       - guivcard-network
     restart: unless-stopped
@@ -22,8 +22,8 @@ services:
     ports:
       - "8190:80"  # Frontend port: 8190 external, 80 internal
     environment:
-      # Backend API URL - Replace YOUR_SERVER_IP with your server's IP or domain name
-      - VITE_API_URL=http://YOUR_SERVER_IP:8195
+      # Backend API URL for local development
+      - VITE_API_URL=http://localhost:8195
     networks:
       - guivcard-network
     restart: unless-stopped

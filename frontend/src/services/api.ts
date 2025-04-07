@@ -17,7 +17,12 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true
+  withCredentials: true,
+  // Ensure credentials are sent with every request
+  auth: {
+    username: '',  // Will be set by AuthContext
+    password: ''   // Will be set by AuthContext
+  }
 });
 
 // Add response interceptor for error handling

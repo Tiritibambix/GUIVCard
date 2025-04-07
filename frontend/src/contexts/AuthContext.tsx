@@ -22,9 +22,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (username: string, password: string) => {
     try {
-      // Create Authorization header
-      const authHeader = `Basic ${btoa(`${username}:${password}`)}`;
-      api.defaults.headers.common['Authorization'] = authHeader;
+      // Configure axios instance with credentials
+      api.defaults.auth = {
+        username,
+        password
+      };
 
       // Test authentication with protected health check endpoint
       const response = await api.get('/api/health');
@@ -33,7 +35,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Store auth info with expiration (2 hours)
         const expiresAt = new Date().getTime() + (2 * 60 * 60 * 1000);
         const authInfo = {
-          authHeader,
+          username,
+          password,
           expiresAt
         };
         sessionStorage.setItem('auth', JSON.stringify(authInfo));
@@ -42,7 +45,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Service unhealthy');
       }
     } catch (error) {
-      delete api.defaults.headers.common['Authorization'];
+      api.defaults.auth = {
+        username: '',
+        password: ''
+      };
       sessionStorage.removeItem('auth');
       setIsAuthenticated(false);
       throw new Error('Authentication failed');
@@ -66,16 +72,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const now = new Date().getTime();
         
         if (now < authInfo.expiresAt) {
-          api.defaults.headers.common['Authorization'] = authInfo.authHeader;
+          // Restore credentials in axios instance
+          api.defaults.auth = {
+            username: authInfo.username,
+            password: authInfo.password
+          };
           setIsAuthenticated(true);
         } else {
           sessionStorage.removeItem('auth');
-          delete api.defaults.headers.common['Authorization'];
+          api.defaults.auth = {
+            username: '',
+            password: ''
+          };
           setIsAuthenticated(false);
         }
       } catch (error) {
         sessionStorage.removeItem('auth');
-        delete api.defaults.headers.common['Authorization'];
+        api.defaults.auth = {
+          username: '',
+          password: ''
+        };
         setIsAuthenticated(false);
       }
     }
