@@ -4,7 +4,6 @@ from functools import wraps
 import os
 import caldav
 import vobject
-from werkzeug.security import check_password_hash
 import logging
 import sys
 import requests
@@ -29,8 +28,7 @@ CORS(app)
 # Configuration from environment variables
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')  # Raw password for CardDAV
-ADMIN_PASSWORD_HASH = os.environ['ADMIN_PASSWORD_HASH']  # Hashed password for local auth
+ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']  # Used for both local and CardDAV auth
 CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8190')
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
@@ -38,10 +36,7 @@ logger.info(f"CardDAV URL: {CARDDAV_URL}")
 
 # Test CardDAV connection at startup
 try:
-    if not ADMIN_PASSWORD:
-        logger.warning("ADMIN_PASSWORD not set, CardDAV authentication will fail")
-    
-    # Basic auth header with raw password
+    # Basic auth header
     auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
     headers = {
         'Authorization': f'Basic {auth_header}',
@@ -88,7 +83,8 @@ def check_auth(username, password):
     if not username or not password:
         logger.warning("Missing username or password")
         return False
-    result = username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password)
+    # Simple password comparison since we're using the same credentials
+    result = username == ADMIN_USERNAME and password == ADMIN_PASSWORD
     if not result:
         logger.warning("Invalid credentials provided")
     return result
@@ -103,9 +99,6 @@ def health_check():
 def get_contacts():
     try:
         logger.info(f"Connecting to CardDAV server at {CARDDAV_URL}")
-        
-        if not ADMIN_PASSWORD:
-            raise Exception("ADMIN_PASSWORD environment variable not set")
         
         client = caldav.DAVClient(
             url=CARDDAV_URL,

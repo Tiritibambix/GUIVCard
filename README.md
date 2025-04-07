@@ -28,50 +28,25 @@ Images are built automatically for both amd64 and arm64 architectures.
 
 ## Deployment
 
-### Generate Password Hash
-
-Before deploying, generate a password hash for authentication:
-
-```bash
-python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
-```
-
-This will output something like:
-```
-pbkdf2:sha256:600000$randomsalt$hashedpassword
-```
-
-Copy this hash and use it in your docker-compose.yml for the ADMIN_PASSWORD_HASH environment variable.
-
 ### Configuration
 
-Copy and adjust the docker-compose.yml for your environment:
+Edit the docker-compose.yml file and replace the placeholders:
 
 ```yaml
-services:
-  backend:
-    image: tiritibambix/guivcard-backend:latest
-    ports:
-      - "8191:5000"
-    environment:
-      - CARDDAV_URL=http://radicale:5232/contacts.vcf
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD_HASH=your_generated_hash
-      - CORS_ORIGIN=http://your-server:8190
-
-  frontend:
-    image: tiritibambix/guivcard-frontend:latest
-    ports:
-      - "8190:80"
-    environment:
-      - REACT_APP_API_URL=http://your-server:8191
+environment:
+  - CARDDAV_URL=https://your.carddav-server.com/path/to/contacts
+  - ADMIN_USERNAME=your_username
+  - ADMIN_PASSWORD=your_password
+  - CORS_ORIGIN=http://YOUR_SERVER_IP:8190
 ```
 
 Replace:
-- `your_generated_hash` with the hash generated above
-- `your-server` with your server's IP or domain name
+- `your.carddav-server.com/path/to/contacts` with your CardDAV server URL
+- `your_username` with your CardDAV username
+- `your_password` with your CardDAV password
+- `YOUR_SERVER_IP` with your server's IP address or domain name
 
-### Start the Application
+### Run the Application
 
 ```bash
 docker-compose up -d
@@ -80,17 +55,24 @@ docker-compose up -d
 ## Ports
 
 The application uses the following ports:
-- Backend API: 8191
+- Backend API: 8195
 - Frontend UI: 8190
 
-Access the application at http://your-server:8190
+Access the application at http://YOUR_SERVER_IP:8190
 
-## Security
+## Authentication
 
-- All API endpoints require authentication
-- Passwords are hashed using Werkzeug's secure hash algorithm
-- CORS is configured for secure cross-origin requests
-- All configuration is done through Docker environment variables
+The application uses a simple authentication flow:
+1. Frontend authenticates with backend using Basic Auth
+2. Backend uses the same credentials to authenticate with the CardDAV server
+3. All credentials are configured in docker-compose.yml
+
+## Security Notes
+
+- Never commit passwords or sensitive information to the repository
+- Use HTTPS in production
+- Keep your modified docker-compose.yml secure and never commit it
+- The backend acts as a secure proxy between the frontend and CardDAV server
 
 ## Development
 
