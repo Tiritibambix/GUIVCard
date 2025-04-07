@@ -3,16 +3,18 @@ services:
   backend:
     image: tiritibambix/guivcard-backend:latest
     ports:
-      - "8195:5000"  # Backend port: 8195 external, 5000 internal
+      - "8195:5000"
     environment:
-      - FLASK_ENV=production
-      # CardDAV server URL - IMPORTANT: URL must end with a trailing slash (/)
+      - FLASK_ENV=development  # Pour avoir plus de détails en cas d'erreur
       - CARDDAV_URL=https://your.carddav-server.com/user/contacts/
-      # CardDAV server credentials
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      # CORS configuration
       - CORS_ORIGIN=http://localhost:8190
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - guivcard-network
     restart: unless-stopped
@@ -20,10 +22,12 @@ services:
   frontend:
     image: tiritibambix/guivcard-frontend:latest
     ports:
-      - "8190:80"  # Frontend port: 8190 external, 80 internal
+      - "8190:80"
     environment:
-      # Backend API URL using nginx proxy
       - VITE_API_URL=/api
+    depends_on:
+      backend:
+        condition: service_healthy
     networks:
       - guivcard-network
     restart: unless-stopped
