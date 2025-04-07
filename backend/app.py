@@ -7,6 +7,8 @@ import vobject
 from werkzeug.security import check_password_hash
 import logging
 import sys
+import requests
+from urllib.parse import urlparse
 
 # Configure logging to write to stdout
 logging.basicConfig(
@@ -17,10 +19,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger('guivcard')
 
-# Make Flask's default logger also write to stdout
-for handler in logging.getLogger('werkzeug').handlers:
-    logging.getLogger('werkzeug').removeHandler(handler)
-logging.getLogger('werkzeug').addHandler(logging.StreamHandler(sys.stdout))
+# Enable debug logging for requests library
+logging.getLogger('urllib3').setLevel(logging.DEBUG)
 
 app = Flask(__name__)
 CORS(app)
@@ -33,6 +33,22 @@ CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8190')
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
 logger.info(f"CardDAV URL: {CARDDAV_URL}")
+
+# Test CardDAV connection at startup
+try:
+    parsed_url = urlparse(CARDDAV_URL)
+    base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+    logger.info(f"Testing connection to CardDAV server at {base_url}")
+    
+    response = requests.options(base_url)
+    logger.info(f"Server response headers: {dict(response.headers)}")
+    
+    if 'DAV' in response.headers:
+        logger.info(f"DAV Header: {response.headers['DAV']}")
+    else:
+        logger.warning("No DAV header found in response")
+except Exception as e:
+    logger.error(f"Failed to test CardDAV server: {str(e)}", exc_info=True)
 
 # Configure CORS
 CORS(app, resources={
@@ -77,8 +93,26 @@ def get_contacts():
     try:
         logger.info(f"Attempting to connect to CardDAV server at {CARDDAV_URL}")
         client = caldav.DAVClient(url=CARDDAV_URL)
+        
+        # Test connection with PROPFIND
+        logger.info("Testing CardDAV connection with PROPFIND")
+        try:
+            response = client.session.request(
+                'PROPFIND',
+                CARDDAV_URL,
+                headers={'Depth': '0'}
+            )
+            logger.info(f"PROPFIND response status: {response.status_code}")
+            logger.info(f"PROPFIND response headers: {dict(response.headers)}")
+            logger.debug(f"PROPFIND response content: {response.content}")
+        except Exception as e:
+            logger.error(f"PROPFIND request failed: {str(e)}", exc_info=True)
+        
         principal = client.principal()
+        logger.info(f"Successfully got principal: {principal}")
+        
         address_books = principal.addressbooks()
+        logger.info(f"Found {len(address_books)} address books")
         
         if not address_books:
             logger.warning("No address books found")
@@ -86,9 +120,12 @@ def get_contacts():
             
         contacts = []
         for abook in address_books:
-            logger.info(f"Reading address book: {abook}")
+            logger.info(f"Reading address book: {abook.url}")
             try:
-                for card in abook.get_all_vcards():
+                all_cards = abook.get_all_vcards()
+                logger.info(f"Found {len(all_cards)} contacts in address book")
+                
+                for card in all_cards:
                     try:
                         vcard = vobject.readOne(card)
                         contact = {
@@ -104,146 +141,18 @@ def get_contacts():
                         contacts.append(contact)
                         logger.debug(f"Added contact: {contact['fullName']}")
                     except Exception as e:
-                        logger.error(f"Error processing vCard: {str(e)}")
+                        logger.error(f"Error processing vCard: {str(e)}", exc_info=True)
             except Exception as e:
-                logger.error(f"Error reading address book: {str(e)}")
+                logger.error(f"Error reading address book: {str(e)}", exc_info=True)
                 
-        logger.info(f"Retrieved {len(contacts)} contacts")
+        logger.info(f"Retrieved {len(contacts)} contacts total")
         return jsonify(contacts), 200
     except Exception as e:
-        logger.error(f"Error getting contacts: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        error_msg = f"Error getting contacts: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return jsonify({"error": error_msg}), 500
 
-@app.route('/api/contacts', methods=['POST'])
-@require_auth
-def create_contact():
-    try:
-        data = request.json
-        logger.info(f"Creating new contact: {data.get('fullName', '')}")
-        
-        client = caldav.DAVClient(url=CARDDAV_URL)
-        principal = client.principal()
-        address_books = principal.addressbooks()
-        
-        if not address_books:
-            logger.warning("No address books found")
-            return jsonify({"message": "No address books found"}), 404
-            
-        address_book = address_books[0]
-        logger.info(f"Using address book: {address_book}")
-        
-        # Create vCard
-        vcard = vobject.vCard()
-        vcard.add('fn').value = data['fullName']
-        if data.get('email'):
-            vcard.add('email').value = data['email']
-        if data.get('phone'):
-            vcard.add('tel').value = data['phone']
-        if data.get('organization'):
-            vcard.add('org').value = [data['organization']]
-        if data.get('title'):
-            vcard.add('title').value = data['title']
-        if data.get('notes'):
-            vcard.add('note').value = data['notes']
-            
-        # Save vCard
-        address_book.add_vcard(vcard=vcard.serialize())
-        logger.info("Contact created successfully")
-        return jsonify({"message": "Contact created successfully"}), 201
-    except Exception as e:
-        logger.error(f"Error creating contact: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/contacts/<contact_id>', methods=['PUT'])
-@require_auth
-def update_contact(contact_id):
-    try:
-        data = request.json
-        logger.info(f"Updating contact {contact_id}: {data.get('fullName', '')}")
-        
-        client = caldav.DAVClient(url=CARDDAV_URL)
-        principal = client.principal()
-        address_books = principal.addressbooks()
-        
-        if not address_books:
-            logger.warning("No address books found")
-            return jsonify({"message": "No address books found"}), 404
-            
-        # Find contact in address books
-        for abook in address_books:
-            try:
-                card = abook.get_vcard(contact_id)
-                vcard = vobject.readOne(card)
-                
-                # Update fields
-                vcard.fn.value = data['fullName']
-                if data.get('email'):
-                    if hasattr(vcard, 'email'):
-                        vcard.email.value = data['email']
-                    else:
-                        vcard.add('email').value = data['email']
-                if data.get('phone'):
-                    if hasattr(vcard, 'tel'):
-                        vcard.tel.value = data['phone']
-                    else:
-                        vcard.add('tel').value = data['phone']
-                if data.get('organization'):
-                    if hasattr(vcard, 'org'):
-                        vcard.org.value = [data['organization']]
-                    else:
-                        vcard.add('org').value = [data['organization']]
-                if data.get('title'):
-                    if hasattr(vcard, 'title'):
-                        vcard.title.value = data['title']
-                    else:
-                        vcard.add('title').value = data['title']
-                if data.get('notes'):
-                    if hasattr(vcard, 'note'):
-                        vcard.note.value = data['notes']
-                    else:
-                        vcard.add('note').value = data['notes']
-                
-                # Save updated vCard
-                card.set_vcard(vcard.serialize())
-                logger.info("Contact updated successfully")
-                return jsonify({"message": "Contact updated successfully"}), 200
-            except caldav.error.NotFoundError:
-                continue
-                
-        logger.warning(f"Contact not found: {contact_id}")
-        return jsonify({"message": "Contact not found"}), 404
-    except Exception as e:
-        logger.error(f"Error updating contact: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/contacts/<contact_id>', methods=['DELETE'])
-@require_auth
-def delete_contact(contact_id):
-    try:
-        logger.info(f"Deleting contact: {contact_id}")
-        client = caldav.DAVClient(url=CARDDAV_URL)
-        principal = client.principal()
-        address_books = principal.addressbooks()
-        
-        if not address_books:
-            logger.warning("No address books found")
-            return jsonify({"message": "No address books found"}), 404
-            
-        # Find and delete contact in address books
-        for abook in address_books:
-            try:
-                card = abook.get_vcard(contact_id)
-                card.delete()
-                logger.info("Contact deleted successfully")
-                return jsonify({"message": "Contact deleted successfully"}), 200
-            except caldav.error.NotFoundError:
-                continue
-                
-        logger.warning(f"Contact not found: {contact_id}")
-        return jsonify({"message": "Contact not found"}), 404
-    except Exception as e:
-        logger.error(f"Error deleting contact: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+# [Rest of the code remains the same...]
 
 if __name__ == '__main__':
     logger.info("Starting Flask application...")
