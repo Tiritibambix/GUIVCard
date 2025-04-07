@@ -20,8 +20,8 @@ logging.basicConfig(
 logger = logging.getLogger('guivcard')
 
 # Enable debug logging for requests and caldav
-logging.getLogger('urllib3').setLevel(logging.DEBUG)
-logging.getLogger('caldav').setLevel(logging.DEBUG)
+logging.getLogger('urllib3').setLevel(logging.INFO)
+logging.getLogger('caldav').setLevel(logging.INFO)
 
 app = Flask(__name__)
 CORS(app)
@@ -30,7 +30,7 @@ CORS(app)
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
 ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
-CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8195')
+CORS_ORIGIN = os.environ.get('CORS_ORIGIN', ['http://localhost:8195', 'http://localhost:80', 'http://localhost'])
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
 logger.info(f"CardDAV URL: {CARDDAV_URL}")
@@ -61,7 +61,7 @@ except Exception as e:
 # Configure CORS
 CORS(app, resources={
     r"/api/*": {
-        "origins": CORS_ORIGIN,
+        "origins": CORS_ORIGIN if isinstance(CORS_ORIGIN, list) else [CORS_ORIGIN],
         "methods": ["GET", "POST", "PUT", "DELETE"],
         "allow_headers": ["Authorization", "Content-Type"],
         "expose_headers": ["Authorization"],
