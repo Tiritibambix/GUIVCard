@@ -9,8 +9,8 @@ services:
       # CardDAV server URL - IMPORTANT: URL must end with a trailing slash (/)
       - CARDDAV_URL=https://your.carddav-server.com/user/contacts/
       # CardDAV server credentials
-      - ADMIN_USERNAME=your_username
-      - ADMIN_PASSWORD=your_password
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       # CORS - Replace YOUR_SERVER_IP with your server's IP or domain name
       - CORS_ORIGIN=http://YOUR_SERVER_IP:8190
     networks:

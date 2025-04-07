@@ -30,7 +30,10 @@ CORS(app)
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
 ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
-CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost').split(',')
+CORS_ORIGIN = os.environ.get('CORS_ORIGIN')
+if not CORS_ORIGIN:
+    CORS_ORIGIN = 'http://localhost:8190'  # Default value
+logger.info(f"Using CORS_ORIGIN: {CORS_ORIGIN}")
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
 logger.info(f"CardDAV URL: {CARDDAV_URL}")
@@ -57,20 +60,21 @@ except Exception as e:
     logger.error(f"Failed to test CardDAV server: {str(e)}", exc_info=True)
 
 # Configure CORS
-# Configure CORS more permissively for development
+# Configure CORS
 CORS(app,
      resources={r"/api/*": {
-         "origins": ["http://localhost", "http://localhost:80", "http://127.0.0.1", "http://127.0.0.1:80"],
+         "origins": CORS_ORIGIN.split(',') if isinstance(CORS_ORIGIN, str) else CORS_ORIGIN,
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          "allow_headers": ["Authorization", "Content-Type"],
          "expose_headers": ["Authorization"],
          "supports_credentials": True,
          "send_wildcard": False
      }},
-     allow_headers=["Authorization", "Content-Type"],
-     expose_headers=["Authorization"],
      supports_credentials=True
 )
+
+# Log CORS configuration
+logger.info(f"Configured CORS with origins: {CORS_ORIGIN}")
 
 def require_auth(f):
     @wraps(f)
