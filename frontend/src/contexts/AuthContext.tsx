@@ -28,12 +28,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password
       };
 
-      // Test authentication with health check endpoint
-      await api.get('/api/health');
+      // Test authentication with protected health check endpoint
+      const response = await api.get('/api/health');
       
-      // Store credentials in localStorage
-      localStorage.setItem('auth', btoa(`${username}:${password}`));
-      setIsAuthenticated(true);
+      if (response.data.status === 'healthy') {
+        // Store auth info with expiration (2 hours)
+        const expiresAt = new Date().getTime() + (2 * 60 * 60 * 1000);
+        const authInfo = {
+          credentials: btoa(`${username}:${password}`),
+          expiresAt
+        };
+        sessionStorage.setItem('auth', JSON.stringify(authInfo));
+        setIsAuthenticated(true);
+      } else {
+        throw new Error('Service unhealthy');
+      }
     } catch (error) {
       localStorage.removeItem('auth');
       setIsAuthenticated(false);
@@ -42,18 +51,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('auth');
+    sessionStorage.removeItem('auth');
     delete api.defaults.auth;
     setIsAuthenticated(false);
+    // Force reload to clear any cached data
+    window.location.href = '/login';
   }, []);
 
   // Check for stored credentials on mount
   React.useEffect(() => {
-    const storedAuth = localStorage.getItem('auth');
+    const storedAuth = sessionStorage.getItem('auth');
     if (storedAuth) {
-      const [username, password] = atob(storedAuth).split(':');
-      api.defaults.auth = { username, password };
-      setIsAuthenticated(true);
+      try {
+        const authInfo = JSON.parse(storedAuth);
+        const now = new Date().getTime();
+        
+        if (now < authInfo.expiresAt) {
+          const [username, password] = atob(authInfo.credentials).split(':');
+          api.defaults.auth = { username, password };
+          setIsAuthenticated(true);
+        } else {
+          sessionStorage.removeItem('auth');
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        sessionStorage.removeItem('auth');
+        setIsAuthenticated(false);
+      }
     }
   }, []);
 

@@ -9,6 +9,7 @@ const ContactList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | undefined>();
+  const [operationLoading, setOperationLoading] = useState(false);
 
   useEffect(() => {
     loadContacts();
@@ -17,11 +18,13 @@ const ContactList: React.FC = () => {
   const loadContacts = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await contactService.getContacts();
       setContacts(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load contacts');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to load contacts';
+      setError(`Error: ${errorMessage}`);
+      console.error('Load contacts error:', err);
     } finally {
       setLoading(false);
     }
@@ -31,15 +34,25 @@ const ContactList: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this contact?')) return;
     
     try {
+      setOperationLoading(true);
+      setError(null);
       await contactService.deleteContact(id);
       setContacts(contacts.filter((contact: Contact) => contact.id !== id));
-    } catch (err) {
-      setError('Failed to delete contact');
+      setError(null);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to delete contact';
+      setError(`Error: ${errorMessage}`);
+      console.error('Delete contact error:', err);
+    } finally {
+      setOperationLoading(false);
     }
   };
 
   const handleSave = async (data: ContactFormData) => {
     try {
+      setOperationLoading(true);
+      setError(null);
+      
       if (selectedContact) {
         const updatedContact = await contactService.updateContact(selectedContact.id, data);
         setContacts(contacts.map((c: Contact) => c.id === selectedContact.id ? updatedContact : c));
@@ -47,10 +60,17 @@ const ContactList: React.FC = () => {
         const newContact = await contactService.createContact(data);
         setContacts([...contacts, newContact]);
       }
+      
       setIsModalOpen(false);
       setSelectedContact(undefined);
-    } catch (err) {
-      throw new Error('Failed to save contact');
+      setError(null);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to save contact';
+      setError(`Error: ${errorMessage}`);
+      console.error('Save contact error:', err);
+      throw new Error(errorMessage);
+    } finally {
+      setOperationLoading(false);
     }
   };
 
@@ -75,7 +95,15 @@ const ContactList: React.FC = () => {
   if (error) {
     return (
       <div className="bg-red-50 p-4 rounded-md">
-        <div className="text-red-700">{error}</div>
+        <div className="flex justify-between items-center">
+          <div className="text-red-700">{error}</div>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-700 hover:text-red-900"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -139,9 +167,11 @@ const ContactList: React.FC = () => {
         onClose={() => {
           setIsModalOpen(false);
           setSelectedContact(undefined);
+          setError(null);
         }}
         onSave={handleSave}
         contact={selectedContact}
+        loading={operationLoading}
       />
     </div>
   );

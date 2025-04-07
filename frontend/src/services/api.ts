@@ -4,12 +4,12 @@ import axios, { AxiosResponse, AxiosError } from 'axios';
 declare global {
   interface Window {
     ENV: {
-      API_URL: string;
+      VITE_API_URL: string;
     };
   }
 }
 
-const API_URL = window.ENV?.API_URL || 'http://localhost:8191';
+const API_URL = window.ENV?.VITE_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:8195';
 
 // Create an axios instance with default config
 export const api = axios.create({

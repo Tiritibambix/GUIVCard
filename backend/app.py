@@ -91,9 +91,37 @@ def check_auth(username, password):
     return result
 
 @app.route('/api/health', methods=['GET'])
+@require_auth
 def health_check():
     logger.info("Health check endpoint called")
-    return jsonify({"status": "healthy"}), 200
+    try:
+        # Test CardDAV connection
+        auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
+        headers = {
+            'Authorization': f'Basic {auth_header}',
+            'User-Agent': 'GuiVCard/1.0',
+            'Depth': '1'
+        }
+        response = requests.request('PROPFIND', CARDDAV_URL, headers=headers)
+        
+        if response.status_code == 207:
+            return jsonify({
+                "status": "healthy",
+                "cardDAV": "connected"
+            }), 200
+        else:
+            return jsonify({
+                "status": "degraded",
+                "cardDAV": "error",
+                "error": f"CardDAV server returned {response.status_code}"
+            }), 503
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "cardDAV": "error",
+            "error": str(e)
+        }), 503
 
 @app.route('/api/contacts', methods=['GET'])
 @require_auth
