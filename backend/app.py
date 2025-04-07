@@ -147,7 +147,7 @@ def get_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        abook = principal.addressbook()
+        abook = principal.address_book()
         vcard = abook.get_vcard(contact_id)
         
         contact = {
@@ -166,7 +166,7 @@ def get_contact(contact_id):
 def contacts():
     client = get_carddav_client()
     principal = client.principal()
-    abook = principal.addressbook()
+    abook = principal.address_book()
     
     if request.method == 'POST':
         try:
@@ -208,7 +208,7 @@ def update_contact():
     try:
         client = get_carddav_client()
         principal = client.principal()
-        abook = principal.addressbook()
+        abook = principal.address_book()
         
         contact_id = request.form['contact_id']
         vcard = abook.get_vcard(contact_id)
@@ -241,7 +241,7 @@ def delete_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        abook = principal.addressbook()
+        abook = principal.address_book()
         vcard = abook.get_vcard(contact_id)
         vcard.delete()
         flash('Contact deleted successfully')
