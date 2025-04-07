@@ -34,14 +34,16 @@ Edit the docker-compose.yml file and replace the placeholders:
 
 ```yaml
 environment:
-  - CARDDAV_URL=https://your.carddav-server.com/path/to/contacts
+  - CARDDAV_URL=https://your.carddav-server.com/admin/contacts/
   - ADMIN_USERNAME=your_username
   - ADMIN_PASSWORD=your_password
   - CORS_ORIGIN=http://YOUR_SERVER_IP:8190
 ```
 
 Replace:
-- `your.carddav-server.com/path/to/contacts` with your CardDAV server URL
+- `your.carddav-server.com/admin/contacts/` with the full URL to your CardDAV address book
+  - For Radicale, it's typically `https://radicale.example.com/username/contacts/`
+  - You can find this URL in your Radicale web interface
 - `your_username` with your CardDAV username
 - `your_password` with your CardDAV password
 - `YOUR_SERVER_IP` with your server's IP address or domain name
