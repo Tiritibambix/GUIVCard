@@ -6,13 +6,21 @@ import caldav
 import vobject
 from werkzeug.security import check_password_hash
 import logging
+import sys
 
-# Configure logging
+# Configure logging to write to stdout
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s'
+    stream=sys.stdout,
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('guivcard')
+
+# Make Flask's default logger also write to stdout
+for handler in logging.getLogger('werkzeug').handlers:
+    logging.getLogger('werkzeug').removeHandler(handler)
+logging.getLogger('werkzeug').addHandler(logging.StreamHandler(sys.stdout))
 
 app = Flask(__name__)
 CORS(app)
@@ -22,6 +30,9 @@ CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
 ADMIN_PASSWORD_HASH = os.environ['ADMIN_PASSWORD_HASH']
 CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8190')
+
+logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
+logger.info(f"CardDAV URL: {CARDDAV_URL}")
 
 # Configure CORS
 CORS(app, resources={
@@ -42,6 +53,7 @@ def require_auth(f):
         if not check_auth(auth.username, auth.password):
             logger.warning(f"Failed authentication attempt for user: {auth.username}")
             return jsonify({"message": "Authentication failed"}), 401
+        logger.info(f"Successful authentication for user: {auth.username}")
         return f(*args, **kwargs)
     return decorated
 
@@ -63,7 +75,7 @@ def health_check():
 @require_auth
 def get_contacts():
     try:
-        logger.info(f"Connecting to CardDAV server at {CARDDAV_URL}")
+        logger.info(f"Attempting to connect to CardDAV server at {CARDDAV_URL}")
         client = caldav.DAVClient(url=CARDDAV_URL)
         principal = client.principal()
         address_books = principal.addressbooks()
@@ -75,20 +87,26 @@ def get_contacts():
         contacts = []
         for abook in address_books:
             logger.info(f"Reading address book: {abook}")
-            for card in abook.get_all_vcards():
-                vcard = vobject.readOne(card)
-                contact = {
-                    "id": card.id,
-                    "fullName": str(vcard.fn.value),
-                    "email": str(vcard.email.value) if hasattr(vcard, 'email') else None,
-                    "phone": str(vcard.tel.value) if hasattr(vcard, 'tel') else None,
-                    "organization": str(vcard.org.value[0]) if hasattr(vcard, 'org') else None,
-                    "title": str(vcard.title.value) if hasattr(vcard, 'title') else None,
-                    "notes": str(vcard.note.value) if hasattr(vcard, 'note') else None,
-                    "lastModified": card.get_etag()
-                }
-                contacts.append(contact)
-                logger.debug(f"Added contact: {contact['fullName']}")
+            try:
+                for card in abook.get_all_vcards():
+                    try:
+                        vcard = vobject.readOne(card)
+                        contact = {
+                            "id": card.id,
+                            "fullName": str(vcard.fn.value),
+                            "email": str(vcard.email.value) if hasattr(vcard, 'email') else None,
+                            "phone": str(vcard.tel.value) if hasattr(vcard, 'tel') else None,
+                            "organization": str(vcard.org.value[0]) if hasattr(vcard, 'org') else None,
+                            "title": str(vcard.title.value) if hasattr(vcard, 'title') else None,
+                            "notes": str(vcard.note.value) if hasattr(vcard, 'note') else None,
+                            "lastModified": card.get_etag()
+                        }
+                        contacts.append(contact)
+                        logger.debug(f"Added contact: {contact['fullName']}")
+                    except Exception as e:
+                        logger.error(f"Error processing vCard: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error reading address book: {str(e)}")
                 
         logger.info(f"Retrieved {len(contacts)} contacts")
         return jsonify(contacts), 200
@@ -228,4 +246,5 @@ def delete_contact(contact_id):
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    logger.info("Starting Flask application...")
     app.run(host='0.0.0.0', debug=os.environ.get('FLASK_ENV') == 'development')
