@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from functools import wraps
 import os
-import carddav
+import caldav
 import vobject
 from werkzeug.security import check_password_hash
 
@@ -46,8 +46,30 @@ def health_check():
 @require_auth
 def get_contacts():
     try:
-        # TODO: Implement CardDAV client connection and contact fetching
-        return jsonify({"message": "Contact fetching not implemented yet"}), 501
+        client = caldav.DAVClient(url=CARDDAV_URL)
+        principal = client.principal()
+        address_books = principal.addressbooks()
+        
+        if not address_books:
+            return jsonify({"message": "No address books found"}), 404
+            
+        contacts = []
+        for abook in address_books:
+            for card in abook.get_all_vcards():
+                vcard = vobject.readOne(card)
+                contact = {
+                    "id": card.id,
+                    "fullName": str(vcard.fn.value),
+                    "email": str(vcard.email.value) if hasattr(vcard, 'email') else None,
+                    "phone": str(vcard.tel.value) if hasattr(vcard, 'tel') else None,
+                    "organization": str(vcard.org.value[0]) if hasattr(vcard, 'org') else None,
+                    "title": str(vcard.title.value) if hasattr(vcard, 'title') else None,
+                    "notes": str(vcard.note.value) if hasattr(vcard, 'note') else None,
+                    "lastModified": card.get_etag()
+                }
+                contacts.append(contact)
+                
+        return jsonify(contacts), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -55,8 +77,33 @@ def get_contacts():
 @require_auth
 def create_contact():
     try:
-        # TODO: Implement contact creation
-        return jsonify({"message": "Contact creation not implemented yet"}), 501
+        data = request.json
+        client = caldav.DAVClient(url=CARDDAV_URL)
+        principal = client.principal()
+        address_books = principal.addressbooks()
+        
+        if not address_books:
+            return jsonify({"message": "No address books found"}), 404
+            
+        address_book = address_books[0]  # Use first address book
+        
+        # Create vCard
+        vcard = vobject.vCard()
+        vcard.add('fn').value = data['fullName']
+        if data.get('email'):
+            vcard.add('email').value = data['email']
+        if data.get('phone'):
+            vcard.add('tel').value = data['phone']
+        if data.get('organization'):
+            vcard.add('org').value = [data['organization']]
+        if data.get('title'):
+            vcard.add('title').value = data['title']
+        if data.get('notes'):
+            vcard.add('note').value = data['notes']
+            
+        # Save vCard
+        address_book.add_vcard(vcard=vcard.serialize())
+        return jsonify({"message": "Contact created successfully"}), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -64,8 +111,55 @@ def create_contact():
 @require_auth
 def update_contact(contact_id):
     try:
-        # TODO: Implement contact update
-        return jsonify({"message": "Contact update not implemented yet"}), 501
+        data = request.json
+        client = caldav.DAVClient(url=CARDDAV_URL)
+        principal = client.principal()
+        address_books = principal.addressbooks()
+        
+        if not address_books:
+            return jsonify({"message": "No address books found"}), 404
+            
+        # Find contact in address books
+        for abook in address_books:
+            try:
+                card = abook.get_vcard(contact_id)
+                vcard = vobject.readOne(card)
+                
+                # Update fields
+                vcard.fn.value = data['fullName']
+                if data.get('email'):
+                    if hasattr(vcard, 'email'):
+                        vcard.email.value = data['email']
+                    else:
+                        vcard.add('email').value = data['email']
+                if data.get('phone'):
+                    if hasattr(vcard, 'tel'):
+                        vcard.tel.value = data['phone']
+                    else:
+                        vcard.add('tel').value = data['phone']
+                if data.get('organization'):
+                    if hasattr(vcard, 'org'):
+                        vcard.org.value = [data['organization']]
+                    else:
+                        vcard.add('org').value = [data['organization']]
+                if data.get('title'):
+                    if hasattr(vcard, 'title'):
+                        vcard.title.value = data['title']
+                    else:
+                        vcard.add('title').value = data['title']
+                if data.get('notes'):
+                    if hasattr(vcard, 'note'):
+                        vcard.note.value = data['notes']
+                    else:
+                        vcard.add('note').value = data['notes']
+                
+                # Save updated vCard
+                card.set_vcard(vcard.serialize())
+                return jsonify({"message": "Contact updated successfully"}), 200
+            except caldav.error.NotFoundError:
+                continue
+                
+        return jsonify({"message": "Contact not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -73,8 +167,23 @@ def update_contact(contact_id):
 @require_auth
 def delete_contact(contact_id):
     try:
-        # TODO: Implement contact deletion
-        return jsonify({"message": "Contact deletion not implemented yet"}), 501
+        client = caldav.DAVClient(url=CARDDAV_URL)
+        principal = client.principal()
+        address_books = principal.addressbooks()
+        
+        if not address_books:
+            return jsonify({"message": "No address books found"}), 404
+            
+        # Find and delete contact in address books
+        for abook in address_books:
+            try:
+                card = abook.get_vcard(contact_id)
+                card.delete()
+                return jsonify({"message": "Contact deleted successfully"}), 200
+            except caldav.error.NotFoundError:
+                continue
+                
+        return jsonify({"message": "Contact not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
