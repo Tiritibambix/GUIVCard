@@ -30,7 +30,7 @@ CORS(app)
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
 ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
-CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8190')
+CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8195')
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
 logger.info(f"CardDAV URL: {CARDDAV_URL}")
