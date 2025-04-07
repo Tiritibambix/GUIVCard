@@ -5,9 +5,10 @@ services:
       - "8191:5000"
     environment:
       - FLASK_ENV=production
-      - CARDDAV_URL=http://radicale:5232/contacts.vcf
+      - CARDDAV_URL=https://my.radicale.com/admin/contacts/
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD_HASH=pbkdf2:sha256:600000$dAL26NLqZGqLg6Al$e6b6976ea7816f29a666093ee33bca57f4e2ee17ae395307fd26f227d22dc925
+      - ADMIN_PASSWORD=your_raw_password_here
       - CORS_ORIGIN=http://localhost:8190
     networks:
       - guivcard-network

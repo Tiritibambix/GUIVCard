@@ -29,7 +29,8 @@ CORS(app)
 # Configuration from environment variables
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
-ADMIN_PASSWORD_HASH = os.environ['ADMIN_PASSWORD_HASH']
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')  # Raw password for CardDAV
+ADMIN_PASSWORD_HASH = os.environ['ADMIN_PASSWORD_HASH']  # Hashed password for local auth
 CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8190')
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
@@ -37,18 +38,25 @@ logger.info(f"CardDAV URL: {CARDDAV_URL}")
 
 # Test CardDAV connection at startup
 try:
-    # Basic auth header
-    auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD_HASH}".encode()).decode()
+    if not ADMIN_PASSWORD:
+        logger.warning("ADMIN_PASSWORD not set, CardDAV authentication will fail")
+    
+    # Basic auth header with raw password
+    auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
     headers = {
         'Authorization': f'Basic {auth_header}',
-        'User-Agent': 'GuiVCard/1.0'
+        'User-Agent': 'GuiVCard/1.0',
+        'Depth': '0'
     }
     
     # Test addressbook access
-    response = requests.request('PROPFIND', CARDDAV_URL, headers={**headers, 'Depth': '0'})
+    response = requests.request('PROPFIND', CARDDAV_URL, headers=headers)
     logger.info(f"PROPFIND response status: {response.status_code}")
     logger.info(f"Address book response headers: {dict(response.headers)}")
-    logger.debug(f"Address book response content: {response.content.decode()}")
+    if response.status_code == 401:
+        logger.error("Authentication failed - please check ADMIN_PASSWORD")
+    elif response.status_code == 207:
+        logger.info("Successfully connected to CardDAV server")
 
 except Exception as e:
     logger.error(f"Failed to test CardDAV server: {str(e)}", exc_info=True)
@@ -96,7 +104,15 @@ def get_contacts():
     try:
         logger.info(f"Connecting to CardDAV server at {CARDDAV_URL}")
         
-        client = caldav.DAVClient(url=CARDDAV_URL, username=ADMIN_USERNAME, password=ADMIN_PASSWORD_HASH)
+        if not ADMIN_PASSWORD:
+            raise Exception("ADMIN_PASSWORD environment variable not set")
+        
+        client = caldav.DAVClient(
+            url=CARDDAV_URL,
+            username=ADMIN_USERNAME,
+            password=ADMIN_PASSWORD,
+            ssl_verify_cert=True
+        )
         logger.info("Successfully created DAVClient")
         
         principal = client.principal()
@@ -134,7 +150,7 @@ def get_contacts():
                     except Exception as e:
                         logger.error(f"Error processing vCard: {str(e)}")
             except Exception as e:
-                logger.error(f"Error reading address book: {str(e)}")
+                logger.error(f"Error reading address book: {str(e)}", exc_info=True)
                 
         logger.info(f"Retrieved {len(contacts)} contacts total")
         return jsonify(contacts), 200
