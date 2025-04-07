@@ -13,7 +13,7 @@ import base64
 # Configure logging to write to stdout
 logging.basicConfig(
     stream=sys.stdout,
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
@@ -30,7 +30,7 @@ CORS(app)
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
 ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
-CORS_ORIGIN = os.environ.get('CORS_ORIGIN', ['http://localhost:8195', 'http://localhost:80', 'http://localhost'])
+CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost').split(',')
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
 logger.info(f"CardDAV URL: {CARDDAV_URL}")
@@ -47,8 +47,6 @@ try:
     # Test addressbook access with PROPFIND
     response = requests.request('PROPFIND', CARDDAV_URL, headers=headers)
     logger.info(f"PROPFIND response status: {response.status_code}")
-    logger.info(f"Address book response headers: {dict(response.headers)}")
-    logger.debug(f"Address book response content: {response.content.decode()}")
     
     if response.status_code == 207:
         logger.info("Successfully connected to CardDAV server")
@@ -59,15 +57,20 @@ except Exception as e:
     logger.error(f"Failed to test CardDAV server: {str(e)}", exc_info=True)
 
 # Configure CORS
-CORS(app, resources={
-    r"/api/*": {
-        "origins": CORS_ORIGIN if isinstance(CORS_ORIGIN, list) else [CORS_ORIGIN],
-        "methods": ["GET", "POST", "PUT", "DELETE"],
-        "allow_headers": ["Authorization", "Content-Type"],
-        "expose_headers": ["Authorization"],
-        "supports_credentials": True
-    }
-})
+# Configure CORS more permissively for development
+CORS(app,
+     resources={r"/api/*": {
+         "origins": ["http://localhost", "http://localhost:80", "http://127.0.0.1", "http://127.0.0.1:80"],
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "allow_headers": ["Authorization", "Content-Type"],
+         "expose_headers": ["Authorization"],
+         "supports_credentials": True,
+         "send_wildcard": False
+     }},
+     allow_headers=["Authorization", "Content-Type"],
+     expose_headers=["Authorization"],
+     supports_credentials=True
+)
 
 def require_auth(f):
     @wraps(f)
@@ -104,8 +107,7 @@ def health_check():
             'User-Agent': 'GuiVCard/1.0',
             'Depth': '1'
         }
-        response = requests.request('PROPFIND', CARDDAV_URL, headers=headers)
-        
+        response = requests.request('PROPFIND', CARDDAV_URL, headers=headers, timeout=5)
         if response.status_code == 207:
             return jsonify({
                 "status": "healthy",
@@ -146,14 +148,12 @@ def get_contacts():
         logger.info(f"Created AddressBook object for URL: {CARDDAV_URL}")
 
         try:
-            logger.debug("Getting all vcards...")
             cards = list(address_book.get_all_vcards())
             logger.info(f"Found {len(cards)} contacts in address book")
 
             contacts = []
             for card in cards:
                 try:
-                    logger.debug(f"Processing card: {card.id}")
                     vcard = vobject.readOne(card)
                     contact = {
                         "id": card.id,
