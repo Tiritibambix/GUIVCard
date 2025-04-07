@@ -36,7 +36,7 @@ logger.info(f"Starting GuiVCard with CardDAV URL: {CARDDAV_URL}")
 def index():
     if 'username' not in session:
         return redirect(url_for('login'))
-    return render_template('index.html')
+    return redirect(url_for('contacts'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -45,7 +45,7 @@ def login():
         password = request.form.get('password')
         if check_auth(username, password):
             session['username'] = username
-            return redirect(url_for('index'))
+            return redirect(url_for('contacts'))
         flash('Invalid credentials')
         return render_template('login.html')
     return render_template('login.html')
@@ -179,11 +179,11 @@ def contacts():
             
             abook.save_vcard(vcard.serialize())
             flash('Contact created successfully')
-            return redirect(url_for('index'))
+            return redirect(url_for('contacts'))
         except Exception as e:
             logger.error(f"Error creating contact: {str(e)}")
             flash(f"Error creating contact: {str(e)}")
-            return redirect(url_for('index'))
+            return redirect(url_for('contacts'))
     
     # GET: List contacts
     try:
@@ -233,9 +233,9 @@ def update_contact():
         logger.error(f"Error updating contact: {str(e)}")
         flash(f"Error updating contact: {str(e)}")
     
-    return redirect(url_for('index'))
+    return redirect(url_for('contacts'))
 
-@app.route('/contacts/<contact_id>', methods=['DELETE'])
+@app.route('/contacts/<contact_id>/delete', methods=['POST'])
 @check_login_required
 def delete_contact(contact_id):
     try:
@@ -244,10 +244,12 @@ def delete_contact(contact_id):
         abook = principal.addressbook()
         vcard = abook.get_vcard(contact_id)
         vcard.delete()
-        return '', 204
+        flash('Contact deleted successfully')
+        return redirect(url_for('contacts'))
     except Exception as e:
         logger.error(f"Error deleting contact: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        flash(f"Error deleting contact: {str(e)}")
+        return redirect(url_for('contacts'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=os.environ.get('FLASK_ENV') == 'development')
