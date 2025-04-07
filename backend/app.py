@@ -37,47 +37,18 @@ logger.info(f"CardDAV URL: {CARDDAV_URL}")
 
 # Test CardDAV connection at startup
 try:
-    parsed_url = urlparse(CARDDAV_URL)
-    base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
-    logger.info(f"Testing connection to CardDAV server at {base_url}")
-    
     # Basic auth header
-    auth = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD_HASH}".encode()).decode()
+    auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD_HASH}".encode()).decode()
     headers = {
-        'Authorization': f'Basic {auth}',
+        'Authorization': f'Basic {auth_header}',
         'User-Agent': 'GuiVCard/1.0'
     }
     
-    # Test OPTIONS
-    response = requests.options(base_url, headers=headers)
-    logger.info(f"OPTIONS response status: {response.status_code}")
-    logger.info(f"Server response headers: {dict(response.headers)}")
-    
-    if 'DAV' in response.headers:
-        logger.info(f"DAV Header: {response.headers['DAV']}")
-        if 'addressbook' in response.headers['DAV']:
-            logger.info("Server supports CardDAV (addressbook)")
-        else:
-            logger.warning("Server might not support CardDAV")
-    else:
-        logger.warning("No DAV header found in response")
-
-    # Test PROPFIND
-    logger.info(f"Testing PROPFIND on {CARDDAV_URL}")
-    response = requests.request(
-        'PROPFIND',
-        CARDDAV_URL,
-        headers={**headers, 'Depth': '0'},
-        data="""<?xml version="1.0" encoding="utf-8"?>
-            <D:propfind xmlns:D="DAV:">
-                <D:prop>
-                    <D:resourcetype/>
-                </D:prop>
-            </D:propfind>"""
-    )
+    # Test addressbook access
+    response = requests.request('PROPFIND', CARDDAV_URL, headers={**headers, 'Depth': '0'})
     logger.info(f"PROPFIND response status: {response.status_code}")
-    logger.info(f"PROPFIND response headers: {dict(response.headers)}")
-    logger.debug(f"PROPFIND response content: {response.content.decode()}")
+    logger.info(f"Address book response headers: {dict(response.headers)}")
+    logger.debug(f"Address book response content: {response.content.decode()}")
 
 except Exception as e:
     logger.error(f"Failed to test CardDAV server: {str(e)}", exc_info=True)
@@ -123,14 +94,14 @@ def health_check():
 @require_auth
 def get_contacts():
     try:
-        logger.info(f"Attempting to connect to CardDAV server at {CARDDAV_URL}")
-        client = caldav.DAVClient(url=CARDDAV_URL)
+        logger.info(f"Connecting to CardDAV server at {CARDDAV_URL}")
         
-        logger.info("Getting principal...")
+        client = caldav.DAVClient(url=CARDDAV_URL, username=ADMIN_USERNAME, password=ADMIN_PASSWORD_HASH)
+        logger.info("Successfully created DAVClient")
+        
         principal = client.principal()
         logger.info(f"Successfully got principal: {principal}")
         
-        logger.info("Getting addressbooks...")
         address_books = principal.addressbooks()
         logger.info(f"Found {len(address_books)} address books")
         
@@ -143,7 +114,7 @@ def get_contacts():
             logger.info(f"Reading address book: {abook.url}")
             try:
                 cards = list(abook.get_all_vcards())
-                logger.info(f"Found {len(cards)} contacts in address book {abook.url}")
+                logger.info(f"Found {len(cards)} contacts in address book")
                 
                 for card in cards:
                     try:
@@ -161,9 +132,9 @@ def get_contacts():
                         contacts.append(contact)
                         logger.debug(f"Added contact: {contact['fullName']}")
                     except Exception as e:
-                        logger.error(f"Error processing vCard: {str(e)}", exc_info=True)
+                        logger.error(f"Error processing vCard: {str(e)}")
             except Exception as e:
-                logger.error(f"Error reading address book: {str(e)}", exc_info=True)
+                logger.error(f"Error reading address book: {str(e)}")
                 
         logger.info(f"Retrieved {len(contacts)} contacts total")
         return jsonify(contacts), 200
@@ -171,8 +142,6 @@ def get_contacts():
         error_msg = f"Error getting contacts: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return jsonify({"error": error_msg}), 500
-
-# [Rest of the code remains the same...]
 
 if __name__ == '__main__':
     logger.info("Starting Flask application...")
