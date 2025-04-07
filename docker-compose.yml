@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   backend:
-    build: ./backend
+    image: tiritibambix/guivcard-backend:latest
     ports:
       - "8191:5000"
     environment:
@@ -16,7 +14,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    image: tiritibambix/guivcard-frontend:latest
     ports:
       - "8190:80"
     depends_on:

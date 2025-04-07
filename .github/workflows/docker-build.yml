@@ -19,8 +19,8 @@ on:
 
 env:
   REGISTRY: docker.io
-  FRONTEND_IMAGE: yourusername/guivcard-frontend
-  BACKEND_IMAGE: yourusername/guivcard-backend
+  FRONTEND_IMAGE: tiritibambix/guivcard-frontend
+  BACKEND_IMAGE: tiritibambix/guivcard-backend
 
 jobs:
   setup:

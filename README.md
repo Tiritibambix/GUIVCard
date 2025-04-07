@@ -14,29 +14,10 @@ A modern CardDAV client with web interface.
 ## Docker Images
 
 Pre-built Docker images are available on Docker Hub:
-- Backend: `yourusername/guivcard-backend`
-- Frontend: `yourusername/guivcard-frontend`
+- Backend: `tiritibambix/guivcard-backend`
+- Frontend: `tiritibambix/guivcard-frontend`
 
 Images are built automatically for both amd64 and arm64 architectures.
-
-## Project Structure
-
-```
-├── backend/           # Python Flask backend
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── app.py
-│   └── config/
-├── frontend/         # React frontend
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── src/
-│   └── public/
-├── docker/          # Docker related files
-│   └── nginx/
-├── docker-compose.yml
-└── README.md
-```
 
 ## Features
 
@@ -47,25 +28,14 @@ Images are built automatically for both amd64 and arm64 architectures.
 
 ## Deployment
 
-All configuration is done through the docker-compose.yml file. Modify the environment variables in the docker-compose.yml file according to your needs:
+Copy the docker-compose.yml file and adjust the environment variables according to your needs:
 
 ```yaml
-# Backend environment variables
-CARDDAV_URL: Your CardDAV server URL
-ADMIN_USERNAME: Admin username for authentication
-ADMIN_PASSWORD_HASH: Hashed password for admin (use werkzeug.security.generate_password_hash)
-CORS_ORIGIN: Frontend URL (default: http://localhost:8190)
+version: '3.8'
 
-# Frontend environment variables
-REACT_APP_API_URL: Backend API URL (default: http://localhost:8191)
-```
-
-Example docker-compose.yml:
-
-```yaml
 services:
   backend:
-    image: yourusername/guivcard-backend:latest
+    image: tiritibambix/guivcard-backend:latest
     ports:
       - "8191:5000"
     environment:
@@ -75,18 +45,29 @@ services:
       - CORS_ORIGIN=http://localhost:8190
 
   frontend:
-    image: yourusername/guivcard-frontend:latest
+    image: tiritibambix/guivcard-frontend:latest
     ports:
       - "8190:80"
     environment:
       - REACT_APP_API_URL=http://localhost:8191
 ```
 
-To deploy:
+Then start the containers:
 
 ```bash
 docker-compose up -d
 ```
+
+### Environment Variables
+
+#### Backend
+- `CARDDAV_URL`: Your CardDAV server URL
+- `ADMIN_USERNAME`: Admin username for authentication
+- `ADMIN_PASSWORD_HASH`: Hashed password for admin (use werkzeug.security.generate_password_hash)
+- `CORS_ORIGIN`: Frontend URL (default: http://localhost:8190)
+
+#### Frontend
+- `REACT_APP_API_URL`: Backend API URL (default: http://localhost:8191)
 
 ## Ports
 
@@ -96,25 +77,17 @@ The application uses the following ports:
 
 Access the application at http://your-server:8190
 
-## Development
-
-### Local Development
-
-This is a Docker-based application intended to be run in containers. The development environment is fully containerized to ensure consistency across different environments.
-
-### CI/CD
-
-The project uses GitHub Actions for continuous integration and deployment:
-- Automatic building of Docker images for both frontend and backend
-- Security audit of Python and Node.js dependencies
-- Multi-architecture support (amd64, arm64)
-- Automatic Docker Hub description updates
-- Versioned Docker images using Git commit hashes
-
 ## Security
 
 - All API endpoints require authentication
 - Passwords are hashed and never stored in plain text
 - CORS is configured for secure cross-origin requests
 - All configuration is done through Docker environment variables
-- Regular security audits through CI/CD pipeline
+
+## Development
+
+The source code is available on GitHub. The project uses GitHub Actions for CI/CD:
+- Automatic building of Docker images
+- Security audit of dependencies
+- Multi-architecture support (amd64, arm64)
+- Automatic Docker Hub updates
