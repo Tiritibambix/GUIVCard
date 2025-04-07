@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8191:5000"
+    environment:
+      - FLASK_ENV=production
+      - CARDDAV_URL=http://radicale:5232/contacts.vcf
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD_HASH=pbkdf2:sha256:600000$dAL26NLqZGqLg6Al$e6b6976ea7816f29a666093ee33bca57f4e2ee17ae395307fd26f227d22dc925
+      - CORS_ORIGIN=http://localhost:8190
+    networks:
+      - guivcard-network
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8190:80"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8191
+    networks:
+      - guivcard-network
+    restart: unless-stopped
+
+networks:
+  guivcard-network:
+    driver: bridge
