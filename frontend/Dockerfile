@@ -12,6 +12,9 @@ RUN npm install
 # Copy project files
 COPY . .
 
+# Create production env file
+RUN echo "VITE_API_URL=http://YOUR_SERVER_IP:8195" > .env.production
+
 # Build the app
 RUN npm run build
 
@@ -19,11 +22,21 @@ RUN npm run build
 FROM nginx:alpine
 
 # Copy built assets from build stage
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 
 # Add nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Add script to replace environment variables
+RUN echo $'\
+#!/bin/sh\n\
+envsubst < /usr/share/nginx/html/env-config.js.template > /usr/share/nginx/html/env-config.js\n\
+exec nginx -g "daemon off;"\
+' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+
+# Create template for runtime environment variables
+RUN echo "window.ENV = { API_URL: '$VITE_API_URL' };" > /usr/share/nginx/html/env-config.js.template
+
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/docker-entrypoint.sh"]
