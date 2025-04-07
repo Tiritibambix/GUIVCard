@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc python3-dev libssl-dev && \
+    apt-get install -y --no-install-recommends gcc python3-dev libssl-dev curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
