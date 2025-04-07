@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Contact } from '../../types/contact';
+import { Contact, ContactFormData } from '../../types/contact';
 import { contactService } from '../../services/contactService';
+import ContactModal from './ContactModal';
 
 const ContactList: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | undefined>();
 
   useEffect(() => {
     loadContacts();
@@ -29,10 +32,36 @@ const ContactList: React.FC = () => {
     
     try {
       await contactService.deleteContact(id);
-      setContacts(contacts.filter(contact => contact.id !== id));
+      setContacts(contacts.filter((contact: Contact) => contact.id !== id));
     } catch (err) {
       setError('Failed to delete contact');
     }
+  };
+
+  const handleSave = async (data: ContactFormData) => {
+    try {
+      if (selectedContact) {
+        const updatedContact = await contactService.updateContact(selectedContact.id, data);
+        setContacts(contacts.map((c: Contact) => c.id === selectedContact.id ? updatedContact : c));
+      } else {
+        const newContact = await contactService.createContact(data);
+        setContacts([...contacts, newContact]);
+      }
+      setIsModalOpen(false);
+      setSelectedContact(undefined);
+    } catch (err) {
+      throw new Error('Failed to save contact');
+    }
+  };
+
+  const openAddModal = () => {
+    setSelectedContact(undefined);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (contact: Contact) => {
+    setSelectedContact(contact);
+    setIsModalOpen(true);
   };
 
   if (loading) {
@@ -57,7 +86,7 @@ const ContactList: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-900">Contacts</h2>
         <button
           className="btn-primary"
-          onClick={() => {/* TODO: Open add contact modal */}}
+          onClick={openAddModal}
         >
           Add Contact
         </button>
@@ -70,7 +99,7 @@ const ContactList: React.FC = () => {
           </div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {contacts.map((contact) => (
+            {contacts.map((contact: Contact) => (
               <li key={contact.id} className="px-6 py-4 hover:bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div>
@@ -86,7 +115,7 @@ const ContactList: React.FC = () => {
                   </div>
                   <div className="flex space-x-4">
                     <button
-                      onClick={() => {/* TODO: Open edit contact modal */}}
+                      onClick={() => openEditModal(contact)}
                       className="text-indigo-600 hover:text-indigo-900"
                     >
                       Edit
@@ -104,6 +133,16 @@ const ContactList: React.FC = () => {
           </ul>
         )}
       </div>
+
+      <ContactModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedContact(undefined);
+        }}
+        onSave={handleSave}
+        contact={selectedContact}
+      />
     </div>
   );
 };

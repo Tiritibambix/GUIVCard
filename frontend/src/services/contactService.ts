@@ -1,25 +1,43 @@
-import axios from 'axios';
 import { Contact, ContactFormData } from '../types/contact';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8191';
+import { api } from './api';
 
 export const contactService = {
   async getContacts(): Promise<Contact[]> {
-    const response = await axios.get(`${API_URL}/api/contacts`);
-    return response.data;
+    try {
+      const response = await api.get('/api/contacts');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch contacts:', error);
+      throw new Error('Failed to fetch contacts');
+    }
   },
 
   async createContact(data: ContactFormData): Promise<Contact> {
-    const response = await axios.post(`${API_URL}/api/contacts`, data);
-    return response.data;
+    try {
+      const response = await api.post('/api/contacts', data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create contact:', error);
+      throw new Error('Failed to create contact');
+    }
   },
 
   async updateContact(id: string, data: ContactFormData): Promise<Contact> {
-    const response = await axios.put(`${API_URL}/api/contacts/${id}`, data);
-    return response.data;
+    try {
+      const response = await api.put(`/api/contacts/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update contact:', error);
+      throw new Error('Failed to update contact');
+    }
   },
 
   async deleteContact(id: string): Promise<void> {
-    await axios.delete(`${API_URL}/api/contacts/${id}`);
+    try {
+      await api.delete(`/api/contacts/${id}`);
+    } catch (error) {
+      console.error('Failed to delete contact:', error);
+      throw new Error('Failed to delete contact');
+    }
   }
 };

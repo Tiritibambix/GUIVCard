@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -22,24 +22,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (username: string, password: string) => {
     try {
-      // Configure axios with basic auth
-      axios.defaults.auth = {
+      // Configure api instance with basic auth
+      api.defaults.auth = {
         username,
         password
       };
 
       // Test authentication with health check endpoint
-      await axios.get(`${process.env.REACT_APP_API_URL}/api/health`);
+      await api.get('/api/health');
+      
+      // Store credentials in localStorage
+      localStorage.setItem('auth', btoa(`${username}:${password}`));
       setIsAuthenticated(true);
     } catch (error) {
+      localStorage.removeItem('auth');
       setIsAuthenticated(false);
       throw new Error('Authentication failed');
     }
   }, []);
 
   const logout = useCallback(() => {
-    delete axios.defaults.auth;
+    localStorage.removeItem('auth');
+    delete api.defaults.auth;
     setIsAuthenticated(false);
+  }, []);
+
+  // Check for stored credentials on mount
+  React.useEffect(() => {
+    const storedAuth = localStorage.getItem('auth');
+    if (storedAuth) {
+      const [username, password] = atob(storedAuth).split(':');
+      api.defaults.auth = { username, password };
+      setIsAuthenticated(true);
+    }
   }, []);
 
   return (

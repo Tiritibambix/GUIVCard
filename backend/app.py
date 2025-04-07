@@ -152,6 +152,190 @@ def get_contacts():
         logger.error(error_msg, exc_info=True)
         return jsonify({"error": error_msg}), 500
 
+@app.route('/api/contacts', methods=['POST'])
+@require_auth
+def create_contact():
+    try:
+        data = request.json
+        if not data or not data.get('fullName'):
+            return jsonify({"error": "Full name is required"}), 400
+
+        logger.debug(f"Creating DAVClient for new contact: {data['fullName']}")
+        client = caldav.DAVClient(
+            url=CARDDAV_URL,
+            username=ADMIN_USERNAME,
+            password=ADMIN_PASSWORD,
+            ssl_verify_cert=True
+        )
+
+        address_book = caldav.AddressBook(
+            client=client,
+            url=CARDDAV_URL
+        )
+
+        # Create vCard
+        vcard = vobject.vCard()
+        vcard.add('fn').value = data['fullName']
+        if data.get('email'):
+            vcard.add('email').value = data['email']
+        if data.get('phone'):
+            vcard.add('tel').value = data['phone']
+        if data.get('organization'):
+            vcard.add('org').value = [data['organization']]
+        if data.get('title'):
+            vcard.add('title').value = data['title']
+        if data.get('notes'):
+            vcard.add('note').value = data['notes']
+
+        # Save to server
+        card = address_book.save_vcard(vcard.serialize())
+        logger.info(f"Successfully created contact: {data['fullName']}")
+
+        # Return the new contact data
+        return jsonify({
+            "id": card.id,
+            "fullName": data['fullName'],
+            "email": data.get('email'),
+            "phone": data.get('phone'),
+            "organization": data.get('organization'),
+            "title": data.get('title'),
+            "notes": data.get('notes'),
+            "lastModified": card.get_etag()
+        }), 201
+
+    except Exception as e:
+        error_msg = f"Error creating contact: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return jsonify({"error": error_msg}), 500
+
+@app.route('/api/contacts/<contact_id>', methods=['PUT'])
+@require_auth
+def update_contact(contact_id):
+    try:
+        data = request.json
+        if not data or not data.get('fullName'):
+            return jsonify({"error": "Full name is required"}), 400
+
+        logger.debug(f"Creating DAVClient for updating contact: {contact_id}")
+        client = caldav.DAVClient(
+            url=CARDDAV_URL,
+            username=ADMIN_USERNAME,
+            password=ADMIN_PASSWORD,
+            ssl_verify_cert=True
+        )
+
+        address_book = caldav.AddressBook(
+            client=client,
+            url=CARDDAV_URL
+        )
+
+        # Find the contact
+        try:
+            card = next(c for c in address_book.get_all_vcards() if c.id == contact_id)
+        except StopIteration:
+            return jsonify({"error": "Contact not found"}), 404
+
+        # Update vCard
+        vcard = vobject.readOne(card)
+        vcard.fn.value = data['fullName']
+        
+        # Update or remove email
+        if hasattr(vcard, 'email'):
+            if data.get('email'):
+                vcard.email.value = data['email']
+            else:
+                del vcard.email
+        elif data.get('email'):
+            vcard.add('email').value = data['email']
+
+        # Update or remove phone
+        if hasattr(vcard, 'tel'):
+            if data.get('phone'):
+                vcard.tel.value = data['phone']
+            else:
+                del vcard.tel
+        elif data.get('phone'):
+            vcard.add('tel').value = data['phone']
+
+        # Update or remove organization
+        if hasattr(vcard, 'org'):
+            if data.get('organization'):
+                vcard.org.value = [data['organization']]
+            else:
+                del vcard.org
+        elif data.get('organization'):
+            vcard.add('org').value = [data['organization']]
+
+        # Update or remove title
+        if hasattr(vcard, 'title'):
+            if data.get('title'):
+                vcard.title.value = data['title']
+            else:
+                del vcard.title
+        elif data.get('title'):
+            vcard.add('title').value = data['title']
+
+        # Update or remove notes
+        if hasattr(vcard, 'note'):
+            if data.get('notes'):
+                vcard.note.value = data['notes']
+            else:
+                del vcard.note
+        elif data.get('notes'):
+            vcard.add('note').value = data['notes']
+
+        # Save updated vCard
+        card.upload(vcard.serialize())
+        logger.info(f"Successfully updated contact: {contact_id}")
+
+        # Return updated contact data
+        return jsonify({
+            "id": card.id,
+            "fullName": data['fullName'],
+            "email": data.get('email'),
+            "phone": data.get('phone'),
+            "organization": data.get('organization'),
+            "title": data.get('title'),
+            "notes": data.get('notes'),
+            "lastModified": card.get_etag()
+        }), 200
+
+    except Exception as e:
+        error_msg = f"Error updating contact: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return jsonify({"error": error_msg}), 500
+
+@app.route('/api/contacts/<contact_id>', methods=['DELETE'])
+@require_auth
+def delete_contact(contact_id):
+    try:
+        logger.debug(f"Creating DAVClient for deleting contact: {contact_id}")
+        client = caldav.DAVClient(
+            url=CARDDAV_URL,
+            username=ADMIN_USERNAME,
+            password=ADMIN_PASSWORD,
+            ssl_verify_cert=True
+        )
+
+        address_book = caldav.AddressBook(
+            client=client,
+            url=CARDDAV_URL
+        )
+
+        # Find and delete the contact
+        try:
+            card = next(c for c in address_book.get_all_vcards() if c.id == contact_id)
+            card.delete()
+            logger.info(f"Successfully deleted contact: {contact_id}")
+            return '', 204
+        except StopIteration:
+            return jsonify({"error": "Contact not found"}), 404
+
+    except Exception as e:
+        error_msg = f"Error deleting contact: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return jsonify({"error": error_msg}), 500
+
 if __name__ == '__main__':
     logger.info("Starting Flask application...")
     app.run(host='0.0.0.0', debug=os.environ.get('FLASK_ENV') == 'development')
