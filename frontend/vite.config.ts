@@ -7,7 +7,7 @@ export default defineConfig({
     port: 8190
   },
   build: {
-    outDir: 'build',
+    outDir: './build',
     sourcemap: true
   }
 })
