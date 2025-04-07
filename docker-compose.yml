@@ -1,13 +1,17 @@
+# CardDAV Contacts Management Interface Configuration
 services:
   backend:
     image: tiritibambix/guivcard-backend:latest
     ports:
-      - "8195:5000"
+      - "8195:5000"  # Backend port: 8195 external, 5000 internal
     environment:
       - FLASK_ENV=production
-      - CARDDAV_URL=https://your.carddav-server.com/admin/contacts/
+      # CardDAV server URL - IMPORTANT: URL must end with a trailing slash (/)
+      - CARDDAV_URL=https://your.carddav-server.com/user/contacts/
+      # CardDAV server credentials
       - ADMIN_USERNAME=your_username
       - ADMIN_PASSWORD=your_password
+      # CORS - Replace YOUR_SERVER_IP with your server's IP or domain name
       - CORS_ORIGIN=http://YOUR_SERVER_IP:8190
     networks:
       - guivcard-network
@@ -16,9 +20,10 @@ services:
   frontend:
     image: tiritibambix/guivcard-frontend:latest
     ports:
-      - "8190:80"
+      - "8190:80"  # Frontend port: 8190 external, 80 internal
     environment:
-      - REACT_APP_API_URL=http://YOUR_SERVER_IP:8195
+      # Backend API URL - Replace YOUR_SERVER_IP with your server's IP or domain name
+      - VITE_API_URL=http://YOUR_SERVER_IP:8195
     networks:
       - guivcard-network
     restart: unless-stopped
@@ -26,3 +31,15 @@ services:
 networks:
   guivcard-network:
     driver: bridge
+
+# Configuration Instructions:
+# 1. Replace YOUR_SERVER_IP with your server's IP address or domain name
+# 2. Set CARDDAV_URL to your CardDAV server URL (must end with a trailing slash)
+# 3. Update ADMIN_USERNAME and ADMIN_PASSWORD with your CardDAV credentials
+#
+# Example configuration for local Radicale server:
+# CARDDAV_URL=http://radicale:5232/user/contacts/
+# ADMIN_USERNAME=admin
+# ADMIN_PASSWORD=password
+# CORS_ORIGIN=http://localhost:8190
+# VITE_API_URL=http://localhost:8195
