@@ -19,8 +19,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger('guivcard')
 
-# Enable debug logging for requests library
+# Enable debug logging for requests and caldav
 logging.getLogger('urllib3').setLevel(logging.DEBUG)
+logging.getLogger('caldav').setLevel(logging.DEBUG)
 
 app = Flask(__name__)
 CORS(app)
@@ -28,7 +29,7 @@ CORS(app)
 # Configuration from environment variables
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
-ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']  # Used for both local and CardDAV auth
+ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
 CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8190')
 
 logger.info(f"Starting GuiVCard backend with CORS_ORIGIN: {CORS_ORIGIN}")
@@ -36,7 +37,6 @@ logger.info(f"CardDAV URL: {CARDDAV_URL}")
 
 # Test CardDAV connection at startup
 try:
-    # Basic auth header
     auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
     headers = {
         'Authorization': f'Basic {auth_header}',
@@ -44,14 +44,15 @@ try:
         'Depth': '0'
     }
     
-    # Test addressbook access
     response = requests.request('PROPFIND', CARDDAV_URL, headers=headers)
     logger.info(f"PROPFIND response status: {response.status_code}")
     logger.info(f"Address book response headers: {dict(response.headers)}")
-    if response.status_code == 401:
-        logger.error("Authentication failed - please check ADMIN_PASSWORD")
-    elif response.status_code == 207:
+    logger.debug(f"Address book response content: {response.content.decode()}")
+    
+    if response.status_code == 207:
         logger.info("Successfully connected to CardDAV server")
+    else:
+        logger.error(f"Unexpected response from server: {response.status_code}")
 
 except Exception as e:
     logger.error(f"Failed to test CardDAV server: {str(e)}", exc_info=True)
@@ -83,7 +84,6 @@ def check_auth(username, password):
     if not username or not password:
         logger.warning("Missing username or password")
         return False
-    # Simple password comparison since we're using the same credentials
     result = username == ADMIN_USERNAME and password == ADMIN_PASSWORD
     if not result:
         logger.warning("Invalid credentials provided")
@@ -98,8 +98,7 @@ def health_check():
 @require_auth
 def get_contacts():
     try:
-        logger.info(f"Connecting to CardDAV server at {CARDDAV_URL}")
-        
+        logger.debug(f"Creating DAVClient with URL: {CARDDAV_URL}, username: {ADMIN_USERNAME}")
         client = caldav.DAVClient(
             url=CARDDAV_URL,
             username=ADMIN_USERNAME,
@@ -107,26 +106,30 @@ def get_contacts():
             ssl_verify_cert=True
         )
         logger.info("Successfully created DAVClient")
-        
+
+        logger.debug("Getting principal...")
         principal = client.principal()
         logger.info(f"Successfully got principal: {principal}")
-        
+
+        logger.debug("Getting addressbooks...")
         address_books = principal.addressbooks()
         logger.info(f"Found {len(address_books)} address books")
-        
+
         if not address_books:
             logger.warning("No address books found")
             return jsonify({"message": "No address books found"}), 404
-            
+
         contacts = []
         for abook in address_books:
             logger.info(f"Reading address book: {abook.url}")
             try:
+                logger.debug("Getting all vcards...")
                 cards = list(abook.get_all_vcards())
                 logger.info(f"Found {len(cards)} contacts in address book")
-                
+
                 for card in cards:
                     try:
+                        logger.debug(f"Processing card: {card.id}")
                         vcard = vobject.readOne(card)
                         contact = {
                             "id": card.id,
@@ -141,10 +144,10 @@ def get_contacts():
                         contacts.append(contact)
                         logger.debug(f"Added contact: {contact['fullName']}")
                     except Exception as e:
-                        logger.error(f"Error processing vCard: {str(e)}")
+                        logger.error(f"Error processing vCard {card.id}: {str(e)}", exc_info=True)
             except Exception as e:
-                logger.error(f"Error reading address book: {str(e)}", exc_info=True)
-                
+                logger.error(f"Error reading address book {abook.url}: {str(e)}", exc_info=True)
+
         logger.info(f"Retrieved {len(contacts)} contacts total")
         return jsonify(contacts), 200
     except Exception as e:
