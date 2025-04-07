@@ -1,5 +1,4 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from functools import wraps
 import os
 import caldav
@@ -24,43 +23,37 @@ logging.getLogger('urllib3').setLevel(logging.INFO)
 logging.getLogger('caldav').setLevel(logging.INFO)
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # for session management
 
 # Configuration from environment variables
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
 ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
-CORS_ORIGIN = os.environ.get('CORS_ORIGIN', 'http://localhost:8190')
 
-# Parse CORS origins
-CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGIN.split(',')]
-logger.info(f"Starting GuiVCard backend with CORS origins: {CORS_ORIGINS}")
-logger.info(f"CardDAV URL: {CARDDAV_URL}")
+logger.info(f"Starting GuiVCard with CardDAV URL: {CARDDAV_URL}")
 
-# Configure CORS
-CORS(app,
-    resources={
-        r"/api/*": {
-            "origins": CORS_ORIGINS,
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Authorization", "Content-Type"],
-            "expose_headers": ["Authorization"],
-            "supports_credentials": True,
-            "max_age": 3600
-        }
-    },
-    allow_credentials=True
-)
+@app.route('/')
+def index():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    return render_template('index.html')
 
-# Add CORS headers to all responses
-@app.after_request
-def after_request(response):
-    if request.method == 'OPTIONS':
-        response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Max-Age'] = '3600'
-    return response
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if check_auth(username, password):
+            session['username'] = username
+            return redirect(url_for('index'))
+        flash('Invalid credentials')
+        return render_template('login.html')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
 
 # Test CardDAV connection at startup
 try:
@@ -105,17 +98,17 @@ def check_auth(username, password):
         logger.warning("Invalid credentials provided")
     return result
 
-@app.route('/api/health', methods=['GET', 'OPTIONS'])
-def health_check():
-    if request.method == 'OPTIONS':
-        response = app.make_default_options_response()
-        return response
+def check_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
-    # Only require auth for GET requests
-    auth = request.authorization
-    if not auth or not check_auth(auth.username, auth.password):
-        return jsonify({"message": "Authentication required"}), 401
-    logger.info("Health check endpoint called")
+@app.route('/health')
+@check_login_required
+def health_check():
     try:
         auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
         headers = {
@@ -125,24 +118,136 @@ def health_check():
         }
         response = requests.request('PROPFIND', CARDDAV_URL, headers=headers, timeout=5)
         
-        if response.status_code == 207:
-            return jsonify({
-                "status": "healthy",
-                "cardDAV": "connected"
-            }), 200
-        else:
-            return jsonify({
-                "status": "degraded",
-                "cardDAV": "error",
-                "error": f"CardDAV server returned {response.status_code}"
-            }), 503
+        status = {
+            'is_healthy': response.status_code == 207,
+            'status_code': response.status_code,
+            'carddav_url': CARDDAV_URL
+        }
+        return render_template('health.html', status=status)
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "cardDAV": "error",
-            "error": str(e)
-        }), 503
+        status = {
+            'is_healthy': False,
+            'error': str(e),
+            'carddav_url': CARDDAV_URL
+        }
+        return render_template('health.html', status=status)
+
+def get_carddav_client():
+    client = caldav.DAVClient(
+        url=CARDDAV_URL,
+        username=ADMIN_USERNAME,
+        password=ADMIN_PASSWORD
+    )
+    return client
+
+@app.route('/contacts/<contact_id>', methods=['GET'])
+@check_login_required
+def get_contact(contact_id):
+    try:
+        client = get_carddav_client()
+        principal = client.principal()
+        abook = principal.addressbook()
+        vcard = abook.get_vcard(contact_id)
+        
+        contact = {
+            'id': contact_id,
+            'name': vcard.vobject_instance.fn.value,
+            'email': vcard.vobject_instance.email.value if hasattr(vcard.vobject_instance, 'email') else '',
+            'phone': vcard.vobject_instance.tel.value if hasattr(vcard.vobject_instance, 'tel') else ''
+        }
+        return jsonify(contact)
+    except Exception as e:
+        logger.error(f"Error getting contact: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/contacts', methods=['GET', 'POST'])
+@check_login_required
+def contacts():
+    client = get_carddav_client()
+    principal = client.principal()
+    abook = principal.addressbook()
+    
+    if request.method == 'POST':
+        try:
+            # Create new contact
+            vcard = vobject.vCard()
+            vcard.add('fn').value = request.form['name']
+            vcard.add('email').value = request.form['email']
+            if request.form.get('phone'):
+                vcard.add('tel').value = request.form['phone']
+            
+            abook.save_vcard(vcard.serialize())
+            flash('Contact created successfully')
+            return redirect(url_for('index'))
+        except Exception as e:
+            logger.error(f"Error creating contact: {str(e)}")
+            flash(f"Error creating contact: {str(e)}")
+            return redirect(url_for('index'))
+    
+    # GET: List contacts
+    try:
+        contacts = []
+        for card in abook.get_vcards():
+            vcard = card.vobject_instance
+            contacts.append({
+                'id': card.id,
+                'name': vcard.fn.value,
+                'email': vcard.email.value if hasattr(vcard, 'email') else '',
+                'phone': vcard.tel.value if hasattr(vcard, 'tel') else ''
+            })
+        return render_template('index.html', contacts=contacts)
+    except Exception as e:
+        logger.error(f"Error listing contacts: {str(e)}")
+        flash(f"Error loading contacts: {str(e)}")
+        return render_template('index.html', contacts=[])
+
+@app.route('/contacts/update', methods=['POST'])
+@check_login_required
+def update_contact():
+    try:
+        client = get_carddav_client()
+        principal = client.principal()
+        abook = principal.addressbook()
+        
+        contact_id = request.form['contact_id']
+        vcard = abook.get_vcard(contact_id)
+        
+        # Update contact
+        vcard_obj = vcard.vobject_instance
+        vcard_obj.fn.value = request.form['name']
+        if hasattr(vcard_obj, 'email'):
+            vcard_obj.email.value = request.form['email']
+        else:
+            vcard_obj.add('email').value = request.form['email']
+            
+        if request.form.get('phone'):
+            if hasattr(vcard_obj, 'tel'):
+                vcard_obj.tel.value = request.form['phone']
+            else:
+                vcard_obj.add('tel').value = request.form['phone']
+        
+        abook.save_vcard(vcard_obj.serialize(), contact_id)
+        flash('Contact updated successfully')
+    except Exception as e:
+        logger.error(f"Error updating contact: {str(e)}")
+        flash(f"Error updating contact: {str(e)}")
+    
+    return redirect(url_for('index'))
+
+@app.route('/contacts/<contact_id>', methods=['DELETE'])
+@check_login_required
+def delete_contact(contact_id):
+    try:
+        client = get_carddav_client()
+        principal = client.principal()
+        abook = principal.addressbook()
+        vcard = abook.get_vcard(contact_id)
+        vcard.delete()
+        return '', 204
+    except Exception as e:
+        logger.error(f"Error deleting contact: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=os.environ.get('FLASK_ENV') == 'development')

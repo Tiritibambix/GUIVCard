@@ -12,8 +12,12 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy requirements and templates first for better caching
+COPY requirements.txt .
+COPY templates ./templates/
+
+# Copy remaining application code
+COPY app.py .
 
 # Set environment variables
 ENV FLASK_APP=app.py

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuiVCard - Health Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <a href="{{ url_for('index') }}" class="text-gray-800 font-bold text-xl">GuiVCard</a>
+                </div>
+                <div class="flex items-center">
+                    <a href="{{ url_for('logout') }}" class="text-gray-600 hover:text-gray-900">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-2xl font-bold mb-6">System Health Status</h2>
+                
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                        <div class="mr-4">
+                            {% if status.is_healthy %}
+                                <div class="w-4 h-4 rounded-full bg-green-500"></div>
+                            {% else %}
+                                <div class="w-4 h-4 rounded-full bg-red-500"></div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h3 class="font-semibold">CardDAV Server</h3>
+                            <p class="text-gray-600">{{ status.carddav_url }}</p>
+                        </div>
+                    </div>
+
+                    <div class="border-t pt-4">
+                        <h4 class="font-semibold mb-2">Details</h4>
+                        {% if status.is_healthy %}
+                            <p class="text-green-600">Connected successfully (Status: {{ status.status_code }})</p>
+                        {% else %}
+                            {% if status.status_code %}
+                                <p class="text-red-600">Connection failed (Status: {{ status.status_code }})</p>
+                            {% endif %}
+                            {% if status.error %}
+                                <p class="text-red-600">Error: {{ status.error }}</p>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <a href="{{ url_for('health_check') }}" 
+                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Refresh Status
+                    </a>
+                    <a href="{{ url_for('index') }}"
+                       class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
