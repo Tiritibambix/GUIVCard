@@ -64,6 +64,8 @@ CORS(app, resources={
         "origins": CORS_ORIGIN,
         "methods": ["GET", "POST", "PUT", "DELETE"],
         "allow_headers": ["Authorization", "Content-Type"],
+        "expose_headers": ["Authorization"],
+        "supports_credentials": True
     }
 })
 
