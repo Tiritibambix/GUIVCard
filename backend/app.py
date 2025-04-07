@@ -9,6 +9,7 @@ import logging
 import sys
 import requests
 from urllib.parse import urlparse
+import base64
 
 # Configure logging to write to stdout
 logging.basicConfig(
@@ -40,13 +41,44 @@ try:
     base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
     logger.info(f"Testing connection to CardDAV server at {base_url}")
     
-    response = requests.options(base_url)
+    # Basic auth header
+    auth = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD_HASH}".encode()).decode()
+    headers = {
+        'Authorization': f'Basic {auth}',
+        'User-Agent': 'GuiVCard/1.0'
+    }
+    
+    # Test OPTIONS
+    response = requests.options(base_url, headers=headers)
+    logger.info(f"OPTIONS response status: {response.status_code}")
     logger.info(f"Server response headers: {dict(response.headers)}")
     
     if 'DAV' in response.headers:
         logger.info(f"DAV Header: {response.headers['DAV']}")
+        if 'addressbook' in response.headers['DAV']:
+            logger.info("Server supports CardDAV (addressbook)")
+        else:
+            logger.warning("Server might not support CardDAV")
     else:
         logger.warning("No DAV header found in response")
+
+    # Test PROPFIND
+    logger.info(f"Testing PROPFIND on {CARDDAV_URL}")
+    response = requests.request(
+        'PROPFIND',
+        CARDDAV_URL,
+        headers={**headers, 'Depth': '0'},
+        data="""<?xml version="1.0" encoding="utf-8"?>
+            <D:propfind xmlns:D="DAV:">
+                <D:prop>
+                    <D:resourcetype/>
+                </D:prop>
+            </D:propfind>"""
+    )
+    logger.info(f"PROPFIND response status: {response.status_code}")
+    logger.info(f"PROPFIND response headers: {dict(response.headers)}")
+    logger.debug(f"PROPFIND response content: {response.content.decode()}")
+
 except Exception as e:
     logger.error(f"Failed to test CardDAV server: {str(e)}", exc_info=True)
 
@@ -94,23 +126,11 @@ def get_contacts():
         logger.info(f"Attempting to connect to CardDAV server at {CARDDAV_URL}")
         client = caldav.DAVClient(url=CARDDAV_URL)
         
-        # Test connection with PROPFIND
-        logger.info("Testing CardDAV connection with PROPFIND")
-        try:
-            response = client.session.request(
-                'PROPFIND',
-                CARDDAV_URL,
-                headers={'Depth': '0'}
-            )
-            logger.info(f"PROPFIND response status: {response.status_code}")
-            logger.info(f"PROPFIND response headers: {dict(response.headers)}")
-            logger.debug(f"PROPFIND response content: {response.content}")
-        except Exception as e:
-            logger.error(f"PROPFIND request failed: {str(e)}", exc_info=True)
-        
+        logger.info("Getting principal...")
         principal = client.principal()
         logger.info(f"Successfully got principal: {principal}")
         
+        logger.info("Getting addressbooks...")
         address_books = principal.addressbooks()
         logger.info(f"Found {len(address_books)} address books")
         
@@ -122,10 +142,10 @@ def get_contacts():
         for abook in address_books:
             logger.info(f"Reading address book: {abook.url}")
             try:
-                all_cards = abook.get_all_vcards()
-                logger.info(f"Found {len(all_cards)} contacts in address book")
+                cards = list(abook.get_all_vcards())
+                logger.info(f"Found {len(cards)} contacts in address book {abook.url}")
                 
-                for card in all_cards:
+                for card in cards:
                     try:
                         vcard = vobject.readOne(card)
                         contact = {
