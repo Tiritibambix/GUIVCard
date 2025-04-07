@@ -37,7 +37,7 @@ logger.info(f"Starting GuiVCard backend with CORS origins: {CORS_ORIGINS}")
 logger.info(f"CardDAV URL: {CARDDAV_URL}")
 
 # Configure CORS
-CORS(app, 
+CORS(app,
     resources={
         r"/api/*": {
             "origins": CORS_ORIGINS,
@@ -47,8 +47,20 @@ CORS(app,
             "supports_credentials": True,
             "max_age": 3600
         }
-    }
+    },
+    allow_credentials=True
 )
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    if request.method == 'OPTIONS':
+        response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+    return response
 
 # Test CardDAV connection at startup
 try:
@@ -93,9 +105,16 @@ def check_auth(username, password):
         logger.warning("Invalid credentials provided")
     return result
 
-@app.route('/api/health', methods=['GET'])
-@require_auth
+@app.route('/api/health', methods=['GET', 'OPTIONS'])
 def health_check():
+    if request.method == 'OPTIONS':
+        response = app.make_default_options_response()
+        return response
+
+    # Only require auth for GET requests
+    auth = request.authorization
+    if not auth or not check_auth(auth.username, auth.password):
+        return jsonify({"message": "Authentication required"}), 401
     logger.info("Health check endpoint called")
     try:
         auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()

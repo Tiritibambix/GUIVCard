@@ -11,7 +11,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - CORS_ORIGIN=http://localhost:8190
     healthcheck:
-      test: ["CMD", "curl", "-f", "-u", "${ADMIN_USERNAME}:${ADMIN_PASSWORD}", "http://localhost:5000/api/health"]
+      test: ["CMD", "curl", "-f", "--header", "Host: localhost", "-u", "${ADMIN_USERNAME}:${ADMIN_PASSWORD}", "http://localhost:5000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -24,7 +24,7 @@ services:
     ports:
       - "8190:80"
     environment:
-      - VITE_API_URL=/api
+      - VITE_API_URL=http://backend:5000/api
     depends_on:
       backend:
         condition: service_healthy
