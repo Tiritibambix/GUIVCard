@@ -17,8 +17,6 @@ services:
     image: tiritibambix/guivcard-frontend:latest
     ports:
       - "8190:80"
-    depends_on:
-      - backend
     environment:
       - REACT_APP_API_URL=http://localhost:8191
     networks:

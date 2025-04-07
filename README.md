@@ -6,7 +6,7 @@ A modern CardDAV client with web interface.
 
 - Backend: Python + Flask
 - Frontend: React + TypeScript
-- CardDAV Client: carddav (Python)
+- CardDAV Client: caldav (Python)
 - Authentication: Basic auth
 - UI: Tailwind CSS
 - Deployment: Docker
@@ -28,11 +28,26 @@ Images are built automatically for both amd64 and arm64 architectures.
 
 ## Deployment
 
-Copy the docker-compose.yml file and adjust the environment variables according to your needs:
+### Generate Password Hash
+
+Before deploying, generate a password hash for authentication:
+
+```bash
+python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))"
+```
+
+This will output something like:
+```
+pbkdf2:sha256:600000$randomsalt$hashedpassword
+```
+
+Copy this hash and use it in your docker-compose.yml for the ADMIN_PASSWORD_HASH environment variable.
+
+### Configuration
+
+Copy and adjust the docker-compose.yml for your environment:
 
 ```yaml
-version: '3.8'
-
 services:
   backend:
     image: tiritibambix/guivcard-backend:latest
@@ -41,33 +56,26 @@ services:
     environment:
       - CARDDAV_URL=http://radicale:5232/contacts.vcf
       - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD_HASH=your_hashed_password
-      - CORS_ORIGIN=http://localhost:8190
+      - ADMIN_PASSWORD_HASH=your_generated_hash
+      - CORS_ORIGIN=http://your-server:8190
 
   frontend:
     image: tiritibambix/guivcard-frontend:latest
     ports:
       - "8190:80"
     environment:
-      - REACT_APP_API_URL=http://localhost:8191
+      - REACT_APP_API_URL=http://your-server:8191
 ```
 
-Then start the containers:
+Replace:
+- `your_generated_hash` with the hash generated above
+- `your-server` with your server's IP or domain name
+
+### Start the Application
 
 ```bash
 docker-compose up -d
 ```
-
-### Environment Variables
-
-#### Backend
-- `CARDDAV_URL`: Your CardDAV server URL
-- `ADMIN_USERNAME`: Admin username for authentication
-- `ADMIN_PASSWORD_HASH`: Hashed password for admin (use werkzeug.security.generate_password_hash)
-- `CORS_ORIGIN`: Frontend URL (default: http://localhost:8190)
-
-#### Frontend
-- `REACT_APP_API_URL`: Backend API URL (default: http://localhost:8191)
 
 ## Ports
 
@@ -80,7 +88,7 @@ Access the application at http://your-server:8190
 ## Security
 
 - All API endpoints require authentication
-- Passwords are hashed and never stored in plain text
+- Passwords are hashed using Werkzeug's secure hash algorithm
 - CORS is configured for secure cross-origin requests
 - All configuration is done through Docker environment variables
 
