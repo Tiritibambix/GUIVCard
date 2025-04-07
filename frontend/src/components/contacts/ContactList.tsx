@@ -9,7 +9,6 @@ const ContactList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<Contact | undefined>();
-  const [operationLoading, setOperationLoading] = useState(false);
 
   useEffect(() => {
     loadContacts();
@@ -34,7 +33,6 @@ const ContactList: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this contact?')) return;
     
     try {
-      setOperationLoading(true);
       setError(null);
       await contactService.deleteContact(id);
       setContacts(contacts.filter((contact: Contact) => contact.id !== id));
@@ -44,13 +42,11 @@ const ContactList: React.FC = () => {
       setError(`Error: ${errorMessage}`);
       console.error('Delete contact error:', err);
     } finally {
-      setOperationLoading(false);
     }
   };
 
   const handleSave = async (data: ContactFormData) => {
     try {
-      setOperationLoading(true);
       setError(null);
       
       if (selectedContact) {
@@ -70,7 +66,6 @@ const ContactList: React.FC = () => {
       console.error('Save contact error:', err);
       throw new Error(errorMessage);
     } finally {
-      setOperationLoading(false);
     }
   };
 
