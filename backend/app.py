@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from functools import wraps
 import os
-import caldav
 import vobject
 import logging
 import sys
@@ -118,12 +117,14 @@ def health_check():
     try:
         client, abook = get_carddav_client()
             
-        # Verify we can access the address book by listing contacts
-        next(abook.date_search(), None)  # Try to get first contact, None if empty
+        # List contacts to verify access
+        response = abook['session'].request('PROPFIND', abook['url'], headers={'Depth': '1'})
+        if response.status_code != 207:
+            raise Exception("Could not list contacts")
             
         status = {
-            'is_healthy': True,
-            'carddav_url': str(abook.url),
+            'is_healthy': response.status_code == 207,
+            'carddav_url': abook['url'],
             'message': 'Successfully connected to address book'
         }
         return render_template('health.html', status=status)
@@ -139,32 +140,31 @@ def health_check():
 def get_carddav_client():
     """Get CardDAV client and address book"""
     try:
-        client = caldav.DAVClient(
-            url=CARDDAV_URL,
-            username=ADMIN_USERNAME,
-            password=ADMIN_PASSWORD
-        )
+        # Create session with authentication
+        session = requests.Session()
+        session.auth = (ADMIN_USERNAME, ADMIN_PASSWORD)
+        session.headers.update({
+            'User-Agent': 'GuiVCard/1.0',
+            'Content-Type': 'text/vcard; charset=utf-8'
+        })
         
-        # Get principal, then access address_books()
-        principal = client.principal()
-        logger.info("Connected to CardDAV server")
+        # Verify address book access
+        response = session.request('PROPFIND', CARDDAV_URL, headers={'Depth': '0'})
+        if response.status_code != 207:
+            raise Exception(f"Failed to access address book: status {response.status_code}")
+            
+        logger.info(f"Successfully connected to CardDAV server at {CARDDAV_URL}")
         
-        addressbooks = principal.address_books()
-        if not addressbooks:
-            logger.error("No address books found at URL")
-            raise Exception("No address books found - verify URL points to CardDAV server")
-
-        # Use first available address book
-        abook = addressbooks[0]
-        logger.info(f"Using address book: {abook.url}")
-        
-        # Store reference for convenience
-        client.addressbook = abook
-        return client, abook
+        # Create a simple object to handle address book operations
+        abook = {
+            'url': CARDDAV_URL,
+            'session': session
+        }
+        return session, abook
 
     except Exception as e:
         logger.error(f"Error accessing CardDAV server: {str(e)}")
-        raise Exception(f"Could not access address book - {str(e)}")
+        raise Exception("Could not access address book - verify URL and credentials")
 
 @app.route('/contacts', methods=['GET', 'POST'])
 @check_login_required
@@ -174,7 +174,7 @@ def contacts():
         
         if request.method == 'POST':
             try:
-                # Create new contact as pure vCard string
+                # Create new vCard content
                 vcard_content = f"""BEGIN:VCARD
 VERSION:3.0
 FN:{request.form['name']}
@@ -182,8 +182,15 @@ EMAIL:{request.form['email']}
 {f'TEL:{request.form["phone"]}' if request.form.get('phone') else ''}
 END:VCARD"""
                 
-                # Save directly to address book
-                abook.save_vcard(vcard_content)
+                # Generate a unique filename for the vCard
+                filename = f"{base64.urlsafe_b64encode(os.urandom(12)).decode()}.vcf"
+                url = f"{abook['url'].rstrip('/')}/{filename}"
+                
+                # PUT the new vCard
+                response = abook['session'].put(url, data=vcard_content)
+                if response.status_code not in (201, 204):
+                    raise Exception(f"Failed to create contact: status {response.status_code}")
+                
                 flash('Contact created successfully')
                 return redirect(url_for('contacts'))
             except Exception as e:
@@ -191,29 +198,32 @@ END:VCARD"""
                 flash(f"Error creating contact: {str(e)}")
                 return redirect(url_for('contacts'))
         
-        # GET: List contacts
+        # List contacts via PROPFIND
         contacts = []
-        # Use search() without parameters to get all vcards
-        # List all items in collection
-        for item in abook.date_search():
-            try:
-                vcard_data = vobject.readOne(item.data)
-                if not hasattr(vcard_data, 'fn'):
-                    logger.warning(f"Skipping contact without FN: {item.url}")
-                    continue
-                    
-                # Use the last part of the URL as ID
-                href = item.url.path.split('/')[-1]
-                
-                contacts.append({
-                    'id': href,
-                    'name': vcard_data.fn.value,
-                    'email': vcard_data.email.value if hasattr(vcard_data, 'email') else '',
-                    'phone': vcard_data.tel.value if hasattr(vcard_data, 'tel') else ''
-                })
-            except Exception as card_error:
-                logger.warning(f"Error processing contact: {card_error}")
-                continue
+        response = abook['session'].request('PROPFIND', abook['url'], headers={'Depth': '1'})
+        if response.status_code == 207:
+            # Parse XML response
+            from xml.etree import ElementTree
+            root = ElementTree.fromstring(response.content)
+            
+            # Process each response element
+            for elem in root.findall('.//{DAV:}response'):
+                href = elem.find('.//{DAV:}href').text
+                if href.endswith('.vcf'):  # Only process vCard files
+                    # Get the vCard data
+                    card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
+                    card_response = abook['session'].get(card_url)
+                    if card_response.status_code == 200:
+                        try:
+                            vcard_data = vobject.readOne(card_response.text)
+                            contacts.append({
+                                'id': href.split('/')[-1],
+                                'name': vcard_data.fn.value,
+                                'email': vcard_data.email.value if hasattr(vcard_data, 'email') else '',
+                                'phone': vcard_data.tel.value if hasattr(vcard_data, 'tel') else ''
+                            })
+                        except Exception as e:
+                            logger.warning(f"Error parsing vCard {href}: {e}")
         return render_template('index.html', contacts=contacts)
         
     except Exception as e:
@@ -228,25 +238,26 @@ def update_contact():
         client, abook = get_carddav_client()
         
         contact_id = request.form['contact_id']
-        # Find contact by ID
-        found_item = None
-        for item in abook.date_search():
-            if contact_id in item.url.path:
-                found_item = item
-                break
-                
-        if not found_item:
+        url = f"{abook['url'].rstrip('/')}/{contact_id}"
+        
+        # Verify contact exists
+        response = abook['session'].request('PROPFIND', url, headers={'Depth': '0'})
+        if response.status_code != 207:
             raise Exception("Contact not found")
         
-        # Create new vCard
-        new_vcard = vobject.vCard()
-        new_vcard.add('fn').value = request.form['name']
-        new_vcard.add('email').value = request.form['email']
-        if request.form.get('phone'):
-            new_vcard.add('tel').value = request.form['phone']
-        
+        # Create new vCard content
+        vcard_content = f"""BEGIN:VCARD
+VERSION:3.0
+FN:{request.form['name']}
+EMAIL:{request.form['email']}
+{f'TEL:{request.form["phone"]}' if request.form.get('phone') else ''}
+END:VCARD"""
+
         # Update the contact
-        found_item.put(new_vcard.serialize(), content_type='text/vcard')
+        response = abook['session'].put(url, data=vcard_content)
+        if response.status_code not in (200, 204):
+            raise Exception(f"Failed to update contact: status {response.status_code}")
+            
         flash('Contact updated successfully')
     except Exception as e:
         logger.error(f"Error updating contact: {str(e)}")
@@ -260,18 +271,13 @@ def delete_contact(contact_id):
     try:
         client, abook = get_carddav_client()
         
-        # Find contact by ID
-        found_item = None
-        for item in abook.date_search():
-            if contact_id in item.url.path:
-                found_item = item
-                break
-                
-        if not found_item:
-            raise Exception("Contact not found")
-            
+        url = f"{abook['url'].rstrip('/')}/{contact_id}"
+        
         # Delete the contact
-        found_item.delete()
+        response = abook['session'].delete(url)
+        if response.status_code not in (200, 204):
+            raise Exception(f"Failed to delete contact: status {response.status_code}")
+            
         flash('Contact deleted successfully')
         return redirect(url_for('contacts'))
     except Exception as e:
