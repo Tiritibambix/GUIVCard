@@ -230,24 +230,49 @@ def contacts():
         if request.method == 'POST':
             try:
                 # Collect all available contact data
-                name = request.form.get('name', '').strip()
+                # Process form data
                 vcard_data = {
-                    "FN": name,
-                    "N": name,  # Will be split into last;first automatically
+                    "FN": f"{request.form.get('first_name', '').strip()} {request.form.get('last_name', '').strip()}".strip(),
+                    "N": f"{request.form.get('last_name', '').strip()};{request.form.get('first_name', '').strip()};;;",
                     "EMAIL": request.form.get('email', '').strip(),
                 }
-                
+
+                # Add optional fields
                 if phone := request.form.get('phone', '').strip():
                     vcard_data["TEL"] = phone
-                    
+
                 if org := request.form.get('organization', '').strip():
                     vcard_data["ORG"] = org
-                    
+
+                if url := request.form.get('url', '').strip():
+                    vcard_data["URL"] = url
+
+                if bday := request.form.get('birthday', '').strip():
+                    vcard_data["BDAY"] = bday
+
+                # Process address if any field is provided
+                address_fields = {
+                    'street': request.form.get('street', '').strip(),
+                    'city': request.form.get('city', '').strip(),
+                    'postal': request.form.get('postal', '').strip(),
+                    'country': request.form.get('country', '').strip()
+                }
+                if any(address_fields.values()):
+                    vcard_data["ADR"] = address_fields
+
                 if note := request.form.get('note', '').strip():
                     vcard_data["NOTE"] = note
 
+                # Process photo if uploaded
+                if 'photo' in request.files:
+                    photo_file = request.files['photo']
+                    if photo_file and photo_file.filename:
+                        photo_data = photo_file.read()
+                        vcard_data["PHOTO"] = photo_data
+
                 # Generate vCard content
                 vcard_content = generate_vcard(vcard_data)
+                logger.debug(f"Generated vCard:\n{vcard_content}")
                 
                 # Validate by parsing
                 vobject.readOne(vcard_content)
@@ -299,26 +324,53 @@ def contacts():
                     if card_response.status_code == 200:
                         try:
                             vcard_data = vobject.readOne(card_response.text)
-                            
-                            # Get name components
-                            fn = getattr(vcard_data, 'fn', None)
-                            name = fn.value if fn else "No Name"
-                            
-                            # Get email (first one if multiple exist)
-                            emails = vcard_data.contents.get('email', [])
-                            email = emails[0].value if emails else ''
-                            
-                            # Get phone (first one if multiple exist)
-                            tels = vcard_data.contents.get('tel', [])
-                            phone = tels[0].value if tels else ''
-                            
-                            # Get organization
-                            orgs = vcard_data.contents.get('org', [])
-                            org = orgs[0].value[0] if orgs and orgs[0].value else ''
-                            
-                            # Get note
-                            notes = vcard_data.contents.get('note', [])
-                            note = notes[0].value if notes else ''
+                            contact_info = {
+                                'id': href.split('/')[-1],
+                                'name': getattr(vcard_data.fn, 'value', 'No Name'),
+                                'email': '',
+                                'phone': '',
+                                'org': '',
+                                'url': '',
+                                'birthday': '',
+                                'note': '',
+                                'photo': None,
+                                'address': None
+                            }
+
+                            # Get standard fields
+                            if 'email' in vcard_data.contents:
+                                contact_info['email'] = vcard_data.email.value
+
+                            if 'tel' in vcard_data.contents:
+                                contact_info['phone'] = vcard_data.tel.value
+
+                            if 'org' in vcard_data.contents:
+                                contact_info['org'] = vcard_data.org.value[0]
+
+                            if 'url' in vcard_data.contents:
+                                contact_info['url'] = vcard_data.url.value
+
+                            if 'bday' in vcard_data.contents:
+                                contact_info['birthday'] = vcard_data.bday.value
+
+                            if 'note' in vcard_data.contents:
+                                contact_info['note'] = vcard_data.note.value
+
+                            # Process photo if present
+                            if 'photo' in vcard_data.contents:
+                                photo = vcard_data.photo.value
+                                if isinstance(photo, bytes):
+                                    contact_info['photo'] = base64.b64encode(photo).decode('utf-8')
+
+                            # Process address if present
+                            if 'adr' in vcard_data.contents:
+                                adr = vcard_data.adr.value
+                                contact_info['address'] = {
+                                    'street': adr.street or '',
+                                    'city': adr.city or '',
+                                    'postal': adr.code or '',
+                                    'country': adr.country or ''
+                                }
                             
                             contacts.append({
                                 'id': href.split('/')[-1],

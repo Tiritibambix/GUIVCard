@@ -49,19 +49,48 @@
                         data-email="{{ contact.email }}"
                         data-phone="{{ contact.phone }}"
                         data-organization="{{ contact.org }}"
+                        data-url="{{ contact.url }}"
+                        data-birthday="{{ contact.birthday }}"
+                        data-street="{{ contact.address.street if contact.address else '' }}"
+                        data-city="{{ contact.address.city if contact.address else '' }}"
+                        data-postal="{{ contact.address.postal if contact.address else '' }}"
+                        data-country="{{ contact.address.country if contact.address else '' }}"
                         data-note="{{ contact.note }}">
                         <div class="flex-grow">
-                            <h3 class="text-lg font-medium text-gray-900">{{ contact.name }}</h3>
-                            {% if contact.org %}
-                            <p class="text-sm text-gray-600">{{ contact.org }}</p>
-                            {% endif %}
-                            <p class="text-sm text-gray-500">{{ contact.email }}</p>
-                            {% if contact.phone %}
+                            <div class="flex items-center space-x-2">
+                                {% if contact.photo %}
+                                <img src="data:image/jpeg;base64,{{ contact.photo }}"
+                                     class="w-10 h-10 rounded-full object-cover"
+                                     alt="{{ contact.name }}">
+                                {% endif %}
+                                <div>
+                                    <h3 class="text-lg font-medium text-gray-900">{{ contact.name }}</h3>
+                                    {% if contact.org %}
+                                    <p class="text-sm text-gray-600">{{ contact.org }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="mt-2 space-y-1">
+                                <p class="text-sm text-gray-500">{{ contact.email }}</p>
+                                {% if contact.phone %}
                             <p class="text-sm text-gray-500">{{ contact.phone }}</p>
-                            {% endif %}
-                            {% if contact.note %}
-                            <p class="text-sm text-gray-400 mt-1 italic">{{ contact.note }}</p>
-                            {% endif %}
+                                {% endif %}
+                                {% if contact.url %}
+                                <p class="text-sm text-blue-500"><a href="{{ contact.url }}" target="_blank">{{ contact.url }}</a></p>
+                                {% endif %}
+                                {% if contact.address %}
+                                <p class="text-sm text-gray-500">
+                                    {{ contact.address.street }}, {{ contact.address.city }}<br>
+                                    {{ contact.address.postal }}, {{ contact.address.country }}
+                                </p>
+                                {% endif %}
+                                {% if contact.birthday %}
+                                <p class="text-sm text-gray-500">Birthday: {{ contact.birthday }}</p>
+                                {% endif %}
+                                {% if contact.note %}
+                                <p class="text-sm text-gray-400 mt-1 italic">{{ contact.note }}</p>
+                                {% endif %}
+                            </div>
                         </div>
                         <div class="flex space-x-2">
                             <button onclick="editContact('{{ contact.id }}')" class="text-blue-600 hover:text-blue-800">
@@ -82,30 +111,76 @@
     <div id="contact-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden flex items-center justify-center">
         <div class="bg-white rounded-lg p-8 max-w-md w-full">
             <h2 id="modal-title" class="text-xl font-bold mb-4">New Contact</h2>
-            <form id="contact-form" method="POST" action="{{ url_for('contacts') }}" class="space-y-4">
+            <form id="contact-form" method="POST" action="{{ url_for('contacts') }}"
+                  class="space-y-4" enctype="multipart/form-data">
                 <input type="hidden" id="contact-id" name="contact_id">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label for="name" class="block text-sm font-medium text-gray-700">Full Name</label>
-                        <input type="text" id="name" name="name" required placeholder="John Doe"
+                        <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                        <input type="text" id="first_name" name="first_name" required placeholder="John"
                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                     <div>
-                        <label for="organization" class="block text-sm font-medium text-gray-700">Organization</label>
-                        <input type="text" id="organization" name="organization" placeholder="Company"
+                        <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                        <input type="text" id="last_name" name="last_name" required placeholder="Doe"
                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                 </div>
+                
                 <div>
-                    <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-                    <input type="email" id="email" name="email" required placeholder="john@example.com"
+                    <label for="organization" class="block text-sm font-medium text-gray-700">Organization</label>
+                    <input type="text" id="organization" name="organization" placeholder="Company"
                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                 </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="email" name="email" required placeholder="john@example.com"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
+                        <input type="tel" id="phone" name="phone" placeholder="+1234567890"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                </div>
+
                 <div>
-                    <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
-                    <input type="tel" id="phone" name="phone" placeholder="+1234567890"
+                    <label for="url" class="block text-sm font-medium text-gray-700">Website</label>
+                    <input type="url" id="url" name="url" placeholder="https://example.com"
                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                 </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="birthday" class="block text-sm font-medium text-gray-700">Birthday</label>
+                        <input type="date" id="birthday" name="birthday"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="photo" class="block text-sm font-medium text-gray-700">Photo</label>
+                        <input type="file" id="photo" name="photo" accept="image/jpeg,image/png"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700">Address</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" name="street" placeholder="Street"
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                        <input type="text" name="city" placeholder="City"
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" name="postal" placeholder="Postal Code"
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                        <input type="text" name="country" placeholder="Country"
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                </div>
+
                 <div>
                     <label for="note" class="block text-sm font-medium text-gray-700">Notes</label>
                     <textarea id="note" name="note" rows="2" placeholder="Additional information..."
@@ -141,11 +216,31 @@
             document.getElementById('modal-title').textContent = 'Edit Contact';
             const row = document.querySelector(`[data-contact-id="${contactId}"]`);
             document.getElementById('contact-id').value = contactId;
-            document.getElementById('name').value = row.dataset.name;
-            document.getElementById('email').value = row.dataset.email;
-            document.getElementById('phone').value = row.dataset.phone || '';
-            document.getElementById('organization').value = row.dataset.organization || '';
-            document.getElementById('note').value = row.dataset.note || '';
+
+            // Fill all form fields from data attributes
+            const fields = {
+                'first_name': row.dataset.name.split(';')[1] || '',
+                'last_name': row.dataset.name.split(';')[0] || '',
+                'email': row.dataset.email || '',
+                'phone': row.dataset.phone || '',
+                'organization': row.dataset.organization || '',
+                'url': row.dataset.url || '',
+                'birthday': row.dataset.birthday || '',
+                'street': row.dataset.street || '',
+                'city': row.dataset.city || '',
+                'postal': row.dataset.postal || '',
+                'country': row.dataset.country || '',
+                'note': row.dataset.note || ''
+            };
+
+            // Update each form field
+            Object.entries(fields).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.value = value;
+                }
+            });
+
             document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
             document.getElementById('contact-modal').classList.remove('hidden');
         }
@@ -166,6 +261,37 @@
                 hideContactModal();
             }
         });
+
+        // Handle photo upload preview
+        document.getElementById('photo').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    let preview = document.getElementById('photo-preview');
+                    if (!preview) {
+                        preview = document.createElement('img');
+                        preview.id = 'photo-preview';
+                        preview.className = 'mt-2 w-20 h-20 rounded-full object-cover';
+                        document.getElementById('photo').parentNode.appendChild(preview);
+                    }
+                    preview.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Reset photo preview when opening new contact modal
+        function showNewContactModal() {
+            document.getElementById('modal-title').textContent = 'New Contact';
+            document.getElementById('contact-form').reset();
+            const preview = document.getElementById('photo-preview');
+            if (preview) {
+                preview.remove();
+            }
+            document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
+            document.getElementById('contact-modal').classList.remove('hidden');
+        }
     </script>
 </body>
 </html>
