@@ -116,13 +116,10 @@ def check_login_required(f):
 @check_login_required
 def health_check():
     try:
-        client = get_carddav_client()
-        abook = client.addressbook
-        if not abook:
-            raise Exception("No address book found")
+        client, abook = get_carddav_client()
             
         # Verify we can access the address book by listing contacts
-        next(abook.search(), None)  # Try to get first contact, None if empty
+        next(abook.date_search(), None)  # Try to get first contact, None if empty
             
         status = {
             'is_healthy': True,
@@ -140,6 +137,7 @@ def health_check():
         return render_template('health.html', status=status)
 
 def get_carddav_client():
+    """Get CardDAV client and address book"""
     try:
         client = caldav.DAVClient(
             url=CARDDAV_URL,
@@ -150,39 +148,27 @@ def get_carddav_client():
         principal = client.principal()
         logger.info("Connected to CardDAV server")
         
-        # Get the address book home
+        # Try to use the URL directly as an address book
         try:
-            # Try to use the URL directly as an address book
             abook = caldav.AddressBook(client=client, url=CARDDAV_URL)
-            
             # Test if we can use it
-            abook.get_properties(['{DAV:}resourcetype'])
+            abook.date_search()  # This will fail if not an address book
             logger.info(f"Using address book at: {abook.url}")
-
-        except Exception as e:
-            logger.error(f"Could not access address book home: {str(e)}")
-            raise
+            return client, abook
             
-        # Store the address book reference for later use
-        client.addressbook = abook
-        return client
+        except Exception as e:
+            logger.error(f"Could not access address book: {str(e)}")
+            raise Exception("Could not access address book - verify URL points to a CardDAV collection")
                 
     except Exception as e:
         logger.error(f"Error connecting to CardDAV server: {str(e)}")
-        if 'Could not access address books' in str(e):
-            logger.error("URL might be incorrect or server does not support CardDAV")
         raise
 
 @app.route('/contacts', methods=['GET', 'POST'])
 @check_login_required
 def contacts():
     try:
-        client = get_carddav_client()
-        abook = client.addressbook
-        if not abook:
-            logger.error("No address book available")
-            flash("Error: No address book available")
-            return render_template('index.html', contacts=[])
+        client, abook = get_carddav_client()
         
         if request.method == 'POST':
             try:
@@ -207,15 +193,15 @@ END:VCARD"""
         contacts = []
         # Use search() without parameters to get all vcards
         # List all items in collection
-        for vcard in abook.search(None):
+        for item in abook.date_search():
             try:
-                vcard_data = vobject.readOne(vcard.data)
+                vcard_data = vobject.readOne(item.data)
                 if not hasattr(vcard_data, 'fn'):
-                    logger.warning(f"Skipping contact without FN: {vcard.url}")
+                    logger.warning(f"Skipping contact without FN: {item.url}")
                     continue
                     
                 # Use the last part of the URL as ID
-                href = vcard.url.path.split('/')[-1]
+                href = item.url.path.split('/')[-1]
                 
                 contacts.append({
                     'id': href,
@@ -237,43 +223,28 @@ END:VCARD"""
 @check_login_required
 def update_contact():
     try:
-        client = get_carddav_client()
-        abook = client.addressbook
-        if not abook:
-            logger.error("No address book available")
-            flash("Error: No address book available")
-            return redirect(url_for('contacts'))
+        client, abook = get_carddav_client()
         
         contact_id = request.form['contact_id']
-        # Search by path instead of UID
-        path = f"{CARDDAV_URL}/{contact_id}"
-        item = next(abook.search(path=path))
-        vcard = vobject.readOne(item.data)
+        # Find contact by ID
+        found_item = None
+        for item in abook.date_search():
+            if contact_id in item.url.path:
+                found_item = item
+                break
+                
+        if not found_item:
+            raise Exception("Contact not found")
         
-        # Update contact
-        vcard_obj = vcard.vobject_instance
-        vcard_obj.fn.value = request.form['name']
-        if hasattr(vcard_obj, 'email'):
-            vcard_obj.email.value = request.form['email']
-        else:
-            vcard_obj.add('email').value = request.form['email']
-            
+        # Create new vCard
+        new_vcard = vobject.vCard()
+        new_vcard.add('fn').value = request.form['name']
+        new_vcard.add('email').value = request.form['email']
         if request.form.get('phone'):
-            if hasattr(vcard_obj, 'tel'):
-                vcard_obj.tel.value = request.form['phone']
-            else:
-                vcard_obj.add('tel').value = request.form['phone']
-        
-        # Save directly using vCard format
-        vcard_content = f"""BEGIN:VCARD
-VERSION:3.0
-FN:{request.form['name']}
-EMAIL:{request.form['email']}
-{f'TEL:{request.form["phone"]}' if request.form.get('phone') else ''}
-END:VCARD"""
+            new_vcard.add('tel').value = request.form['phone']
         
         # Update the contact
-        item.put(vcard_content, content_type='text/vcard')
+        found_item.put(new_vcard.serialize(), content_type='text/vcard')
         flash('Contact updated successfully')
     except Exception as e:
         logger.error(f"Error updating contact: {str(e)}")
@@ -285,16 +256,20 @@ END:VCARD"""
 @check_login_required
 def delete_contact(contact_id):
     try:
-        client = get_carddav_client()
-        abook = client.addressbook
-        if not abook:
-            logger.error("No address book available")
-            flash("Error: No address book available")
-            return redirect(url_for('contacts'))
-        # Search by path instead of UID
-        path = f"{CARDDAV_URL}/{contact_id}"
-        item = next(abook.search(path=path))
-        item.delete()
+        client, abook = get_carddav_client()
+        
+        # Find contact by ID
+        found_item = None
+        for item in abook.date_search():
+            if contact_id in item.url.path:
+                found_item = item
+                break
+                
+        if not found_item:
+            raise Exception("Contact not found")
+            
+        # Delete the contact
+        found_item.delete()
         flash('Contact deleted successfully')
         return redirect(url_for('contacts'))
     except Exception as e:
