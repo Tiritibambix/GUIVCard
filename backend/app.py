@@ -169,10 +169,7 @@ def generate_vcard(data: Dict[str, str]) -> str:
         )
 
     if url := data.get("URL"):
-        # Add scheme if not present
-        if url and not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-        lines.append(f"URL:{url}")
+        lines.append(f"URL:{url}")  # Store URL as-is
 
     if photo := data.get("PHOTO"):
         photo_b64 = base64.b64encode(photo).decode("utf-8")
@@ -247,14 +244,9 @@ def contacts():
                 if org := request.form.get('organization', '').strip():
                     vcard_data["ORG"] = org
 
-                # Handle URL field - make it optional and add scheme if needed
+                # Store URL as-is if provided
                 if url := request.form.get('url', '').strip():
-                    # Remove any scheme first
-                    url = url.replace('http://', '').replace('https://', '')
-                    # Remove any leading // or www.
-                    url = url.lstrip('/').replace('www.', '', 1)
-                    if url:  # Only add if we have something after cleanup
-                        vcard_data["URL"] = url
+                    vcard_data["URL"] = url
 
                 if bday := request.form.get('birthday', '').strip():
                     vcard_data["BDAY"] = bday
