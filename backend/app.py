@@ -169,8 +169,7 @@ def generate_vcard(data: Dict[str, str]) -> str:
         )
 
     if url := data.get("URL"):
-        # Format URL according to RFC (prevents resolution attempts)
-        lines.append(f"URL:<{url}>")
+        lines.append(f"URL:{url}")
 
     if photo := data.get("PHOTO"):
         photo_b64 = base64.b64encode(photo).decode("utf-8")
