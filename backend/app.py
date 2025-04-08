@@ -110,18 +110,18 @@ def check_login_required(f):
 @check_login_required
 def health_check():
     try:
-        auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
-        headers = {
-            'Authorization': f'Basic {auth_header}',
-            'User-Agent': 'GuiVCard/1.0',
-            'Depth': '1'
-        }
-        response = requests.request('PROPFIND', CARDDAV_URL, headers=headers, timeout=5)
+        client = get_carddav_client()
+        principal = client.principal()
+        collections = principal.calendars()
+        address_books = [c for c in collections if "addressbook" in c.get_supported_components()]
         
+        if not address_books:
+            raise Exception("No address books available")
+            
         status = {
-            'is_healthy': response.status_code == 207,
-            'status_code': response.status_code,
-            'carddav_url': CARDDAV_URL
+            'is_healthy': True,
+            'carddav_url': CARDDAV_URL,
+            'address_books': len(address_books)
         }
         return render_template('health.html', status=status)
     except Exception as e:
@@ -140,91 +140,51 @@ def get_carddav_client():
             username=ADMIN_USERNAME,
             password=ADMIN_PASSWORD
         )
-        # Test connection and log available resources
+        # Test connection
         principal = client.principal()
-        logger.info("Connected to CardDAV server")
-        
-        homesets = principal.addressbook_homesets()
-        logger.info(f"Found {sum(1 for _ in homesets)} addressbook homesets")
-        
-        homeset = next(iter(principal.addressbook_homesets()))
-        logger.info(f"Using homeset: {homeset}")
-        
-        addressbooks = list(homeset.addressbooks())
-        logger.info(f"Found {len(addressbooks)} addressbooks")
-        
+        collections = principal.calendars()
+        address_books = [c for c in collections if "addressbook" in c.get_supported_components()]
+        logger.info(f"Connected to CardDAV server, found {len(address_books)} address books")
         return client
     except Exception as e:
         logger.error(f"Error connecting to CardDAV server: {str(e)}")
         raise
 
-@app.route('/contacts/<contact_id>', methods=['GET'])
-@check_login_required
-def get_contact(contact_id):
-    try:
-        client = get_carddav_client()
-        principal = client.principal()
-        homesets = list(principal.addressbook_homesets())
-        if not homesets:
-            logger.error("No addressbook homesets found")
-            raise Exception("No addressbook homesets available")
-        homeset = homesets[0]
-        addressbooks = list(homeset.addressbooks())
-        if not addressbooks:
-            logger.error("No addressbooks found in homeset")
-            raise Exception("No addressbooks available")
-        abook = addressbooks[0]
-        vcard = next(abook.search(uid=contact_id))
-        
-        contact = {
-            'id': contact_id,
-            'name': vcard.vobject_instance.fn.value,
-            'email': vcard.vobject_instance.email.value if hasattr(vcard.vobject_instance, 'email') else '',
-            'phone': vcard.vobject_instance.tel.value if hasattr(vcard.vobject_instance, 'tel') else ''
-        }
-        return jsonify(contact)
-    except Exception as e:
-        logger.error(f"Error getting contact: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/contacts', methods=['GET', 'POST'])
 @check_login_required
 def contacts():
-    client = get_carddav_client()
-    principal = client.principal()
-    homesets = list(principal.addressbook_homesets())
-    if not homesets:
-        logger.error("No addressbook homesets found")
-        flash("Error: No addressbook homesets available")
-        return render_template('index.html', contacts=[])
-    homeset = homesets[0]
-    addressbooks = list(homeset.addressbooks())
-    if not addressbooks:
-        logger.error("No addressbooks found in homeset")
-        flash("Error: No addressbooks available")
-        return render_template('index.html', contacts=[])
-    abook = addressbooks[0]
-
-    if request.method == 'POST':
-        try:
-            # Create new contact
-            vcard = vobject.vCard()
-            vcard.add('fn').value = request.form['name']
-            vcard.add('email').value = request.form['email']
-            if request.form.get('phone'):
-                vcard.add('tel').value = request.form['phone']
-            
-            # Save the vcard to the address book
-            abook.add_vcard(vcard.serialize())
-            flash('Contact created successfully')
-            return redirect(url_for('contacts'))
-        except Exception as e:
-            logger.error(f"Error creating contact: {str(e)}")
-            flash(f"Error creating contact: {str(e)}")
-            return redirect(url_for('contacts'))
-    
-    # GET: List contacts
     try:
+        client = get_carddav_client()
+        principal = client.principal()
+        collections = principal.calendars()
+        address_books = [c for c in collections if "addressbook" in c.get_supported_components()]
+        
+        if not address_books:
+            logger.error("No address books found")
+            flash("Error: No address books available")
+            return render_template('index.html', contacts=[])
+        
+        abook = address_books[0]
+        
+        if request.method == 'POST':
+            try:
+                # Create new contact
+                vcard = vobject.vCard()
+                vcard.add('fn').value = request.form['name']
+                vcard.add('email').value = request.form['email']
+                if request.form.get('phone'):
+                    vcard.add('tel').value = request.form['phone']
+                
+                # Save the vcard to the address book
+                abook.add_vcard(vcard.serialize())
+                flash('Contact created successfully')
+                return redirect(url_for('contacts'))
+            except Exception as e:
+                logger.error(f"Error creating contact: {str(e)}")
+                flash(f"Error creating contact: {str(e)}")
+                return redirect(url_for('contacts'))
+        
+        # GET: List contacts
         contacts = []
         # Use search() without parameters to get all vcards
         for card in abook.search():
@@ -236,9 +196,10 @@ def contacts():
                 'phone': vobj.tel.value if hasattr(vobj, 'tel') else ''
             })
         return render_template('index.html', contacts=contacts)
+        
     except Exception as e:
-        logger.error(f"Error listing contacts: {str(e)}")
-        flash(f"Error loading contacts: {str(e)}")
+        logger.error(f"Error accessing contacts: {str(e)}")
+        flash(f"Error: {str(e)}")
         return render_template('index.html', contacts=[])
 
 @app.route('/contacts/update', methods=['POST'])
@@ -247,14 +208,12 @@ def update_contact():
     try:
         client = get_carddav_client()
         principal = client.principal()
-        homesets = list(principal.addressbook_homesets())
-        if not homesets:
-            raise Exception("No addressbook homesets available")
-        homeset = homesets[0]
-        addressbooks = list(homeset.addressbooks())
-        if not addressbooks:
-            raise Exception("No addressbooks available")
-        abook = addressbooks[0]
+        collections = principal.calendars()
+        address_books = [c for c in collections if "addressbook" in c.get_supported_components()]
+        
+        if not address_books:
+            raise Exception("No address books available")
+        abook = address_books[0]
         
         contact_id = request.form['contact_id']
         vcard = next(abook.search(uid=contact_id))
@@ -290,14 +249,12 @@ def delete_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        homesets = list(principal.addressbook_homesets())
-        if not homesets:
-            raise Exception("No addressbook homesets available")
-        homeset = homesets[0]
-        addressbooks = list(homeset.addressbooks())
-        if not addressbooks:
-            raise Exception("No addressbooks available")
-        abook = addressbooks[0]
+        collections = principal.calendars()
+        address_books = [c for c in collections if "addressbook" in c.get_supported_components()]
+        
+        if not address_books:
+            raise Exception("No address books available")
+        abook = address_books[0]
         vcard = next(abook.search(uid=contact_id))
         vcard.delete()
         flash('Contact deleted successfully')
