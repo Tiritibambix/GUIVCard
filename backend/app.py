@@ -300,90 +300,96 @@ def contacts():
                 return redirect(url_for('contacts'))
         
         # List contacts via PROPFIND
+        # List contacts via PROPFIND
         contacts = []
-        # List all contacts with Depth: 1
+        logger.info("Listing contacts...")
+        
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
-            headers={'Depth': '1'}  # Override default Depth: 0
+            headers={'Depth': '1'}
         )
         
         if response.status_code == 207:
-            logger.info(f"Found contacts in address book: {abook['url']}")
-            # Parse XML response
+            logger.info(f"Found response from address book: {abook['url']}")
             from xml.etree import ElementTree
             root = ElementTree.fromstring(response.content)
+            logger.info("Parsed XML response")
             
             # Process each response element
-            for elem in root.findall('.//{DAV:}response'):
-                href = elem.find('.//{DAV:}href').text
-                if href.endswith('.vcf'):  # Only process vCard files
-                    # Get the vCard data
-                    card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
-                    card_response = abook['session'].get(card_url)
-                    if card_response.status_code == 200:
-                        try:
-                            vcard_data = vobject.readOne(card_response.text)
-                            contact_info = {
-                                'id': href.split('/')[-1],
-                                'name': getattr(vcard_data.fn, 'value', 'No Name'),
-                                'email': '',
-                                'phone': '',
-                                'org': '',
-                                'url': '',
-                                'birthday': '',
-                                'note': '',
-                                'photo': None,
-                                'address': None
-                            }
+            ns = {'D': 'DAV:'}
+            for elem in root.findall('.//D:response', ns):
+                href = elem.find('.//D:href', ns).text
+                if not href.endswith('.vcf'):
+                    continue
+                    
+                # Get the vCard data
+                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
+                logger.info(f"Fetching vCard from: {card_url}")
+                card_response = abook['session'].get(card_url)
+                
+                if card_response.status_code != 200:
+                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+                    continue
+                    
+                try:
+                    vcard_data = vobject.readOne(card_response.text)
+                    contact_info = {
+                        'id': href.split('/')[-1],
+                        'name': getattr(vcard_data.fn, 'value', 'No Name'),
+                        'email': '',
+                        'phone': '',
+                        'org': '',
+                        'url': '',
+                        'birthday': '',
+                        'note': '',
+                        'photo': None,
+                        'address': None
+                    }
 
-                            # Get standard fields
-                            if 'email' in vcard_data.contents:
-                                contact_info['email'] = vcard_data.email.value
+                    # Get standard fields
+                    if 'email' in vcard_data.contents:
+                        contact_info['email'] = vcard_data.email.value
 
-                            if 'tel' in vcard_data.contents:
-                                contact_info['phone'] = vcard_data.tel.value
+                    if 'tel' in vcard_data.contents:
+                        contact_info['phone'] = vcard_data.tel.value
 
-                            if 'org' in vcard_data.contents:
-                                contact_info['org'] = vcard_data.org.value[0]
+                    if 'org' in vcard_data.contents:
+                        contact_info['org'] = vcard_data.org.value[0]
 
-                            if 'url' in vcard_data.contents:
-                                contact_info['url'] = vcard_data.url.value
+                    if 'url' in vcard_data.contents:
+                        contact_info['url'] = vcard_data.url.value
 
-                            if 'bday' in vcard_data.contents:
-                                contact_info['birthday'] = vcard_data.bday.value
+                    if 'bday' in vcard_data.contents:
+                        contact_info['birthday'] = vcard_data.bday.value
 
-                            if 'note' in vcard_data.contents:
-                                contact_info['note'] = vcard_data.note.value
+                    if 'note' in vcard_data.contents:
+                        contact_info['note'] = vcard_data.note.value
 
-                            # Process photo if present
-                            if 'photo' in vcard_data.contents:
-                                photo = vcard_data.photo.value
-                                if isinstance(photo, bytes):
-                                    contact_info['photo'] = base64.b64encode(photo).decode('utf-8')
+                    # Process photo if present
+                    if 'photo' in vcard_data.contents:
+                        photo = vcard_data.photo.value
+                        if isinstance(photo, bytes):
+                            contact_info['photo'] = base64.b64encode(photo).decode('utf-8')
 
-                            # Process address if present
-                            if 'adr' in vcard_data.contents:
-                                adr = vcard_data.adr.value
-                                contact_info['address'] = {
-                                    'street': adr.street or '',
-                                    'city': adr.city or '',
-                                    'postal': adr.code or '',
-                                    'country': adr.country or ''
-                                }
-                            
-                            contacts.append({
-                                'id': href.split('/')[-1],
-                                'name': name,
-                                'email': email,
-                                'phone': phone,
-                                'org': org,
-                                'note': note
-                            })
-                            
-                            logger.debug(f"Parsed contact: {name} ({href})")
-                        except Exception as e:
-                            logger.warning(f"Error parsing vCard {href}: {str(e)}\nContent: {card_response.text[:200]}")
+                    # Process address if present
+                    if 'adr' in vcard_data.contents:
+                        adr = vcard_data.adr.value
+                        contact_info['address'] = {
+                            'street': adr.street or '',
+                            'city': adr.city or '',
+                            'postal': adr.code or '',
+                            'country': adr.country or ''
+                        }
+                    
+                    contacts.append(contact_info)
+                    logger.debug(f"Parsed contact: {contact_info['name']} ({href})")
+                    
+                except Exception as e:
+                    logger.warning(f"Error parsing vCard {href}: {str(e)}\nContent: {card_response.text[:200]}")
+                    continue
+        else:
+            logger.error(f"Failed to list contacts: {response.status_code}")
         return render_template('index.html', contacts=contacts)
         
     except Exception as e:
