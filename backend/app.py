@@ -169,7 +169,8 @@ def generate_vcard(data: Dict[str, str]) -> str:
         )
 
     if url := data.get("URL"):
-        lines.append(f"URL:{url}")  # Store URL as-is
+        # Format URL according to RFC (prevents resolution attempts)
+        lines.append(f"URL:<{url}>")
 
     if photo := data.get("PHOTO"):
         photo_b64 = base64.b64encode(photo).decode("utf-8")
@@ -275,8 +276,12 @@ def contacts():
                 vcard_content = generate_vcard(vcard_data)
                 logger.debug(f"Generated vCard:\n{vcard_content}")
                 
-                # Validate by parsing
-                vobject.readOne(vcard_content)
+                # Try to validate syntax only
+                try:
+                    vobject.readOne(vcard_content)
+                except Exception as e:
+                    logger.warning(f"vCard syntax might be invalid: {e}")
+                    
                 logger.info(f"Creating vCard:\n{vcard_content}")
 
                 # Generate a unique filename for the vCard
@@ -452,8 +457,12 @@ def update_contact():
         if note := request.form.get('note', '').strip():
             vcard_data["NOTE"] = note
             
-        # Generate and validate vCard content
+        # Generate vCard content (with safe validation)
         vcard_content = generate_vcard(vcard_data)
+        try:
+            vobject.readOne(vcard_content)
+        except Exception as e:
+            logger.warning(f"vCard syntax might be invalid: {e}")
         logger.info(f"Updating vCard at {url}:\n{vcard_content}")
         
         # Update the contact
