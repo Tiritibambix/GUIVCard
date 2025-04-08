@@ -112,19 +112,19 @@ def health_check():
     try:
         client = get_carddav_client()
         principal = client.principal()
-        collections = principal.calendars()
+        collections = principal.addressbook_collections()
         
         if not collections:
-            raise Exception("No collections found")
+            raise Exception("No address book found")
             
-        # Try to list contacts in the first collection
-        collection = collections[0]
-        collection.search()  # This will fail if it's not a valid address book
+        # Verify we can access the address book
+        abook = collections[0]
+        abook.search()  # This will fail if it's not a valid address book
             
         status = {
             'is_healthy': True,
             'carddav_url': CARDDAV_URL,
-            'message': 'Successfully connected to address book'
+            'message': f'Successfully connected to address book: {abook.url}'
         }
         return render_template('health.html', status=status)
     except Exception as e:
@@ -146,43 +146,26 @@ def get_carddav_client():
         # Test connection and get principal
         principal = client.principal()
         logger.info("Connected to CardDAV server")
-
-        # Try to create address book using direct WebDAV request
+        
+        # Try to get the address book
         try:
-            headers = {
-                'Authorization': f'Basic {base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()}',
-                'Content-Type': 'application/xml; charset=utf-8'
-            }
-            mkcol_xml = """<?xml version="1.0" encoding="utf-8" ?>
-            <D:mkcol xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
-                <D:set>
-                    <D:prop>
-                        <D:resourcetype>
-                            <D:collection/>
-                            <C:addressbook/>
-                        </D:resourcetype>
-                        <D:displayname>Contacts</D:displayname>
-                    </D:prop>
-                </D:set>
-            </D:mkcol>"""
+            # Use the URL directly as an addressbook
+            abook = principal.make_addressbook(name="contacts", path=CARDDAV_URL)
+            logger.info("Using existing address book")
+            return client
+        except Exception as e:
+            logger.warning(f"Could not access address book: {str(e)}")
             
-            response = requests.request('MKCOL', CARDDAV_URL, headers=headers, data=mkcol_xml)
-            logger.info(f"MKCOL response: {response.status_code}")
-            
-            # Even if MKCOL fails (might already exist), continue to try to use the address book
-            collections = principal.calendars()
-            logger.info(f"Found {len(collections)} collections")
-            
-            # Use the first collection as address book
+            # Try to find it in the principal's collections
+            collections = principal.addressbook_collections()
             if collections:
+                logger.info("Found existing address book collection")
                 return client
             else:
-                raise Exception("No collections found after creation attempt")
-            
-        except Exception as e:
-            logger.error(f"Error creating address book: {str(e)}")
-            raise
-        return client
+                logger.warning("No address book found, creating new one")
+                principal.make_addressbook(name="contacts")
+                return client
+                
     except Exception as e:
         logger.error(f"Error connecting to CardDAV server: {str(e)}")
         raise
@@ -193,13 +176,9 @@ def contacts():
     try:
         client = get_carddav_client()
         principal = client.principal()
-        collections = principal.calendars()
+        collections = principal.addressbook_collections()
         if not collections:
-            logger.error("No collections found")
-            flash("Error: No address book available")
-            return render_template('index.html', contacts=[])
-            
-        # Use the first collection as our address book
+            raise Exception("No address book found")
         abook = collections[0]
         
         if request.method == 'POST':
@@ -256,11 +235,9 @@ def update_contact():
     try:
         client = get_carddav_client()
         principal = client.principal()
-        collections = principal.calendars()
+        collections = principal.addressbook_collections()
         if not collections:
-            raise Exception("No collections found")
-            
-        # Use the first collection as our address book
+            raise Exception("No address book found")
         abook = collections[0]
         
         contact_id = request.form['contact_id']
@@ -300,9 +277,9 @@ def delete_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        collections = principal.calendars()
+        collections = principal.addressbook_collections()
         if not collections:
-            raise Exception("No collections found")
+            raise Exception("No address book found")
         abook = collections[0]
         # Search by path instead of UID
         path = f"{CARDDAV_URL}/{contact_id}"
