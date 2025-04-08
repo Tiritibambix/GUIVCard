@@ -312,11 +312,21 @@ def contacts():
                             tels = vcard_data.contents.get('tel', [])
                             phone = tels[0].value if tels else ''
                             
+                            # Get organization
+                            orgs = vcard_data.contents.get('org', [])
+                            org = orgs[0].value[0] if orgs and orgs[0].value else ''
+                            
+                            # Get note
+                            notes = vcard_data.contents.get('note', [])
+                            note = notes[0].value if notes else ''
+                            
                             contacts.append({
                                 'id': href.split('/')[-1],
                                 'name': name,
                                 'email': email,
-                                'phone': phone
+                                'phone': phone,
+                                'org': org,
+                                'note': note
                             })
                             
                             logger.debug(f"Parsed contact: {name} ({href})")
