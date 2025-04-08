@@ -223,14 +223,26 @@ def contacts():
         # GET: List contacts
         contacts = []
         # Use search() without parameters to get all vcards
-        for card in abook.search():
-            vobj = card.vobject_instance
-            contacts.append({
-                'id': card.uid,
-                'name': vobj.fn.value,
-                'email': vobj.email.value if hasattr(vobj, 'email') else '',
-                'phone': vobj.tel.value if hasattr(vobj, 'tel') else ''
-            })
+        # List all items in collection
+        items = abook.search()
+        for item in items:
+            try:
+                # Get the raw vCard data and parse it
+                raw_vcard = item.data
+                vcard = vobject.readOne(raw_vcard)
+                
+                # Extract href as ID (it's more reliable than UID)
+                href = item.url.path.split('/')[-1]
+                
+                contacts.append({
+                    'id': href,
+                    'name': vcard.fn.value,
+                    'email': vcard.email.value if hasattr(vcard, 'email') else '',
+                    'phone': vcard.tel.value if hasattr(vcard, 'tel') else ''
+                })
+            except Exception as card_error:
+                logger.warning(f"Error processing contact: {card_error}")
+                continue
         return render_template('index.html', contacts=contacts)
         
     except Exception as e:
@@ -252,7 +264,10 @@ def update_contact():
         abook = collections[0]
         
         contact_id = request.form['contact_id']
-        vcard = next(abook.search(uid=contact_id))
+        # Search by path instead of UID
+        path = f"{CARDDAV_URL}/{contact_id}"
+        item = next(abook.search(path=path))
+        vcard = vobject.readOne(item.data)
         
         # Update contact
         vcard_obj = vcard.vobject_instance
@@ -288,11 +303,11 @@ def delete_contact(contact_id):
         collections = principal.calendars()
         if not collections:
             raise Exception("No collections found")
-        if not collections:
-            raise Exception("No collections found")
         abook = collections[0]
-        vcard = next(abook.search(uid=contact_id))
-        vcard.delete()
+        # Search by path instead of UID
+        path = f"{CARDDAV_URL}/{contact_id}"
+        item = next(abook.search(path=path))
+        item.delete()
         flash('Contact deleted successfully')
         return redirect(url_for('contacts'))
     except Exception as e:
