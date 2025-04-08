@@ -124,14 +124,10 @@ def health_check():
         # Verify we can access the address book by listing contacts
         next(abook.search(), None)  # Try to get first contact, None if empty
             
-        # Get home set info for debugging
-        home = client.principal().get_addressbook_home()
-        addressbooks = list(home.get_addressbooks())
-            
         status = {
             'is_healthy': True,
             'carddav_url': str(abook.url),
-            'message': f'Connected to address book ({len(addressbooks)} found)'
+            'message': 'Successfully connected to address book'
         }
         return render_template('health.html', status=status)
     except Exception as e:
@@ -156,32 +152,25 @@ def get_carddav_client():
         
         # Get the address book home
         try:
-            home = principal.get_addressbook_home()
-            logger.info("Found address book home")
+            # Try to use the URL directly as an address book
+            abook = caldav.AddressBook(client=client, url=CARDDAV_URL)
             
-            # Try to get existing address book
-            abooks = list(home.get_addressbooks())
-            if abooks:
-                abook = abooks[0]
-                logger.info(f"Using existing address book: {abook.url}")
-            else:
-                # Try to create a new address book
-                abook = home.make_addressbook("contacts")
-                logger.info("Created new address book")
+            # Test if we can use it
+            abook.get_properties(['{DAV:}resourcetype'])
+            logger.info(f"Using address book at: {abook.url}")
 
         except Exception as e:
             logger.error(f"Could not access address book home: {str(e)}")
             raise
             
-        # Store the address book reference
-        # Store both client and address book for easy access
+        # Store the address book reference for later use
         client.addressbook = abook
         return client
                 
     except Exception as e:
         logger.error(f"Error connecting to CardDAV server: {str(e)}")
-        if 'addressbook_home' in str(e):
-            logger.error("Your CardDAV server might not support the correct protocol or URL is incorrect")
+        if 'Could not access address books' in str(e):
+            logger.error("URL might be incorrect or server does not support CardDAV")
         raise
 
 @app.route('/contacts', methods=['GET', 'POST'])
@@ -194,19 +183,19 @@ def contacts():
             logger.error("No address book available")
             flash("Error: No address book available")
             return render_template('index.html', contacts=[])
-        abook = collections[0]
         
         if request.method == 'POST':
             try:
-                # Create new contact
-                vcard = vobject.vCard()
-                vcard.add('fn').value = request.form['name']
-                vcard.add('email').value = request.form['email']
-                if request.form.get('phone'):
-                    vcard.add('tel').value = request.form['phone']
+                # Create new contact as pure vCard string
+                vcard_content = f"""BEGIN:VCARD
+VERSION:3.0
+FN:{request.form['name']}
+EMAIL:{request.form['email']}
+{f'TEL:{request.form["phone"]}' if request.form.get('phone') else ''}
+END:VCARD"""
                 
-                # Save the vcard to the address book
-                abook.add_vcard(vcard.serialize())
+                # Save directly to address book
+                abook.save_vcard(vcard_content)
                 flash('Contact created successfully')
                 return redirect(url_for('contacts'))
             except Exception as e:
@@ -218,21 +207,21 @@ def contacts():
         contacts = []
         # Use search() without parameters to get all vcards
         # List all items in collection
-        items = abook.search()
-        for item in items:
+        for vcard in abook.search(None):
             try:
-                # Get the raw vCard data and parse it
-                raw_vcard = item.data
-                vcard = vobject.readOne(raw_vcard)
-                
-                # Extract href as ID (it's more reliable than UID)
-                href = item.url.path.split('/')[-1]
+                vcard_data = vobject.readOne(vcard.data)
+                if not hasattr(vcard_data, 'fn'):
+                    logger.warning(f"Skipping contact without FN: {vcard.url}")
+                    continue
+                    
+                # Use the last part of the URL as ID
+                href = vcard.url.path.split('/')[-1]
                 
                 contacts.append({
                     'id': href,
-                    'name': vcard.fn.value,
-                    'email': vcard.email.value if hasattr(vcard, 'email') else '',
-                    'phone': vcard.tel.value if hasattr(vcard, 'tel') else ''
+                    'name': vcard_data.fn.value,
+                    'email': vcard_data.email.value if hasattr(vcard_data, 'email') else '',
+                    'phone': vcard_data.tel.value if hasattr(vcard_data, 'tel') else ''
                 })
             except Exception as card_error:
                 logger.warning(f"Error processing contact: {card_error}")
@@ -254,7 +243,6 @@ def update_contact():
             logger.error("No address book available")
             flash("Error: No address book available")
             return redirect(url_for('contacts'))
-        abook = collections[0]
         
         contact_id = request.form['contact_id']
         # Search by path instead of UID
@@ -276,10 +264,16 @@ def update_contact():
             else:
                 vcard_obj.add('tel').value = request.form['phone']
         
-        # Update the vcard in the address book
-        card_data = vcard_obj.serialize()
-        vcard.set_vcard_data(card_data)
-        vcard.save()
+        # Save directly using vCard format
+        vcard_content = f"""BEGIN:VCARD
+VERSION:3.0
+FN:{request.form['name']}
+EMAIL:{request.form['email']}
+{f'TEL:{request.form["phone"]}' if request.form.get('phone') else ''}
+END:VCARD"""
+        
+        # Update the contact
+        item.put(vcard_content, content_type='text/vcard')
         flash('Contact updated successfully')
     except Exception as e:
         logger.error(f"Error updating contact: {str(e)}")
