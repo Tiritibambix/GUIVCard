@@ -55,8 +55,13 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('login'))
 
-# Test CardDAV connection at startup
+# Verify CardDAV URL format at startup
 try:
+    parsed = urlparse(CARDDAV_URL)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError("Invalid CardDAV URL format")
+        
+    # Test connection
     auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
     headers = {
         'Authorization': f'Basic {auth_header}',
@@ -68,12 +73,13 @@ try:
     logger.info(f"CardDAV test status: {response.status_code}")
     
     if response.status_code == 207:
-        logger.info("Successfully connected to CardDAV server")
+        logger.info(f"Successfully connected to CardDAV server at {CARDDAV_URL}")
     else:
         logger.error(f"Unexpected response from server: {response.status_code}")
         
 except Exception as e:
-    logger.error(f"Failed to test CardDAV server: {str(e)}")
+    logger.error(f"Failed to connect to CardDAV server: {str(e)}")
+    logger.error(f"Please verify your CardDAV URL: {CARDDAV_URL}")
 
 def require_auth(f):
     @wraps(f)
@@ -118,10 +124,14 @@ def health_check():
         # Verify we can access the address book by listing contacts
         next(abook.search(), None)  # Try to get first contact, None if empty
             
+        # Get home set info for debugging
+        home = client.principal().get_addressbook_home()
+        addressbooks = list(home.get_addressbooks())
+            
         status = {
             'is_healthy': True,
             'carddav_url': str(abook.url),
-            'message': 'Successfully connected to address book'
+            'message': f'Connected to address book ({len(addressbooks)} found)'
         }
         return render_template('health.html', status=status)
     except Exception as e:
@@ -144,24 +154,34 @@ def get_carddav_client():
         principal = client.principal()
         logger.info("Connected to CardDAV server")
         
-        # Get the address book home set
-        home_set = principal.addressbook_home_set()
-        logger.info("Found address book home set")
-        
-        # Try to get or create the address book
+        # Get the address book home
         try:
-            abook = home_set.addressbook(CARDDAV_URL)
-            logger.info("Using existing address book")
-        except:
-            logger.info("Creating new address book")
-            abook = home_set.make_addressbook("Contacts")
-        
-        # Store the address book URL in the client object for later use
+            home = principal.get_addressbook_home()
+            logger.info("Found address book home")
+            
+            # Try to get existing address book
+            abooks = list(home.get_addressbooks())
+            if abooks:
+                abook = abooks[0]
+                logger.info(f"Using existing address book: {abook.url}")
+            else:
+                # Try to create a new address book
+                abook = home.make_addressbook("contacts")
+                logger.info("Created new address book")
+
+        except Exception as e:
+            logger.error(f"Could not access address book home: {str(e)}")
+            raise
+            
+        # Store the address book reference
+        # Store both client and address book for easy access
         client.addressbook = abook
         return client
                 
     except Exception as e:
         logger.error(f"Error connecting to CardDAV server: {str(e)}")
+        if 'addressbook_home' in str(e):
+            logger.error("Your CardDAV server might not support the correct protocol or URL is incorrect")
         raise
 
 @app.route('/contacts', methods=['GET', 'POST'])
