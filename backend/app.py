@@ -8,6 +8,7 @@ import requests
 from urllib.parse import urlparse
 import base64
 import uuid
+from typing import Dict
 
 # Configure logging to write to stdout
 logging.basicConfig(
@@ -136,7 +137,56 @@ def health_check():
             'error': str(e),
             'carddav_url': CARDDAV_URL
         }
-        return render_template('health.html', status=status)
+def generate_vcard(data: Dict[str, str]) -> str:
+    """Generate a vCard 3.0 from a dictionary of fields."""
+    uid = data.get("UID") or str(uuid.uuid4())
+    lines = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+    ]
+
+    if fn := data.get("FN"):
+        lines.append(f"FN:{fn}")
+
+    if data.get("N"):
+        n_parts = data["N"].split(" ", 1)
+        last = n_parts[0]
+        first = n_parts[1] if len(n_parts) > 1 else ""
+        lines.append(f"N:{last};{first};;;")
+
+    if org := data.get("ORG"):
+        lines.append(f"ORG:{org}")
+
+    if email := data.get("EMAIL"):
+        lines.append(f"EMAIL:{email}")
+
+    if tel := data.get("TEL"):
+        lines.append(f"TEL:{tel}")
+
+    if adr := data.get("ADR"):
+        lines.append(
+            f"ADR:;;{adr.get('street','')};{adr.get('city','')};;{adr.get('postal','')};{adr.get('country','')}"
+        )
+
+    if url := data.get("URL"):
+        lines.append(f"URL:{url}")
+
+    if photo := data.get("PHOTO"):
+        photo_b64 = base64.b64encode(photo).decode("utf-8")
+        lines.append(f"PHOTO;ENCODING=b;TYPE=JPEG:{photo_b64}")
+
+    if bday := data.get("BDAY"):
+        lines.append(f"BDAY:{bday}")
+
+    if note := data.get("NOTE"):
+        lines.append(f"NOTE:{note}")
+
+    lines.append(f"UID:{uid}")
+    lines.append("END:VCARD")
+    lines.append("")  # Final line break
+
+    return "\r\n".join(lines)
+
 
 def get_carddav_client():
     """Get CardDAV client and address book"""
@@ -179,28 +229,28 @@ def contacts():
         
         if request.method == 'POST':
             try:
-                # Get and parse input data
+                # Collect all available contact data
                 name = request.form.get('name', '').strip()
-                email = request.form.get('email', '').strip()
-                phone = request.form.get('phone', '').strip()
+                vcard_data = {
+                    "FN": name,
+                    "N": name,  # Will be split into last;first automatically
+                    "EMAIL": request.form.get('email', '').strip(),
+                }
+                
+                if phone := request.form.get('phone', '').strip():
+                    vcard_data["TEL"] = phone
+                    
+                if org := request.form.get('organization', '').strip():
+                    vcard_data["ORG"] = org
+                    
+                if note := request.form.get('note', '').strip():
+                    vcard_data["NOTE"] = note
 
-                # Simple name parsing (could be improved)
-                parts = name.split(' ', 1)
-                first_name = parts[0]
-                last_name = parts[1] if len(parts) > 1 else ''
-
-                # Create vCard with vobject for validation
-                vcard = vobject.vCard()
-                vcard.add('fn').value = name
-                vcard.add('n').value = vobject.vcard.Name(family=last_name, given=first_name)
-                vcard.add('email').value = email
-                if phone:
-                    vcard.add('tel').value = phone
-                vcard.add('uid').value = str(uuid.uuid4())
-
+                # Generate vCard content
+                vcard_content = generate_vcard(vcard_data)
+                
                 # Validate by parsing
-                vobject.readOne(vcard.serialize())
-                vcard_content = vcard.serialize()
+                vobject.readOne(vcard_content)
                 logger.info(f"Creating vCard:\n{vcard_content}")
 
                 # Generate a unique filename for the vCard
@@ -216,7 +266,6 @@ def contacts():
                 
                 if response.status_code not in (201, 204):
                     raise Exception(f"Failed to create contact: status {response.status_code}, body: {response.text}")
-                    raise Exception(f"Failed to create contact: status {response.status_code}")
                 
                 flash('Contact created successfully')
                 return redirect(url_for('contacts'))
@@ -294,29 +343,25 @@ def update_contact():
         if response.status_code != 207:
             raise Exception("Contact not found")
         
-        # Create new vCard content
-        # Get and parse input data
+        # Collect all contact data for update
         name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip()
-        phone = request.form.get('phone', '').strip()
+        vcard_data = {
+            "FN": name,
+            "N": name,  # Will be split into last;first automatically
+            "EMAIL": request.form.get('email', '').strip(),
+        }
+        
+        if phone := request.form.get('phone', '').strip():
+            vcard_data["TEL"] = phone
+            
+        if org := request.form.get('organization', '').strip():
+            vcard_data["ORG"] = org
+            
+        if note := request.form.get('note', '').strip():
+            vcard_data["NOTE"] = note
 
-        # Simple name parsing
-        parts = name.split(' ', 1)
-        first_name = parts[0]
-        last_name = parts[1] if len(parts) > 1 else ''
-
-        # Create vCard
-        vcard = vobject.vCard()
-        vcard.add('fn').value = name
-        vcard.add('n').value = vobject.vcard.Name(family=last_name, given=first_name)
-        vcard.add('email').value = email
-        if phone:
-            vcard.add('tel').value = phone
-        vcard.add('uid').value = str(uuid.uuid4())
-
-        # Validate and serialize
-        vobject.readOne(vcard.serialize())
-        vcard_content = vcard.serialize()
+        # Generate and validate vCard content
+        vcard_content = generate_vcard(vcard_data)
         
         logger.info(f"Updating vCard at {url}:\n{vcard_content}")
 
