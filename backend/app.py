@@ -147,8 +147,9 @@ def get_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        abook = principal.address_book()
-        vcard = abook.get_vcard(contact_id)
+        address_books = principal.get_address_books()
+        abook = address_books[0]  # Get first available address book
+        vcard = next(abook.search(uid=contact_id))
         
         contact = {
             'id': contact_id,
@@ -166,8 +167,9 @@ def get_contact(contact_id):
 def contacts():
     client = get_carddav_client()
     principal = client.principal()
-    abook = principal.address_book()
-    
+    address_books = principal.get_address_books()
+    abook = address_books[0]  # Get first available address book
+
     if request.method == 'POST':
         try:
             # Create new contact
@@ -177,7 +179,8 @@ def contacts():
             if request.form.get('phone'):
                 vcard.add('tel').value = request.form['phone']
             
-            abook.save_vcard(vcard.serialize())
+            # Save the vcard to the address book
+            abook.add_vcard(vcard.serialize())
             flash('Contact created successfully')
             return redirect(url_for('contacts'))
         except Exception as e:
@@ -188,13 +191,14 @@ def contacts():
     # GET: List contacts
     try:
         contacts = []
-        for card in abook.get_vcards():
-            vcard = card.vobject_instance
+        # Use search() without parameters to get all vcards
+        for card in abook.search():
+            vobj = card.vobject_instance
             contacts.append({
-                'id': card.id,
-                'name': vcard.fn.value,
-                'email': vcard.email.value if hasattr(vcard, 'email') else '',
-                'phone': vcard.tel.value if hasattr(vcard, 'tel') else ''
+                'id': card.uid,
+                'name': vobj.fn.value,
+                'email': vobj.email.value if hasattr(vobj, 'email') else '',
+                'phone': vobj.tel.value if hasattr(vobj, 'tel') else ''
             })
         return render_template('index.html', contacts=contacts)
     except Exception as e:
@@ -208,10 +212,11 @@ def update_contact():
     try:
         client = get_carddav_client()
         principal = client.principal()
-        abook = principal.address_book()
+        address_books = principal.get_address_books()
+        abook = address_books[0]  # Get first available address book
         
         contact_id = request.form['contact_id']
-        vcard = abook.get_vcard(contact_id)
+        vcard = next(abook.search(uid=contact_id))
         
         # Update contact
         vcard_obj = vcard.vobject_instance
@@ -227,7 +232,10 @@ def update_contact():
             else:
                 vcard_obj.add('tel').value = request.form['phone']
         
-        abook.save_vcard(vcard_obj.serialize(), contact_id)
+        # Update the vcard in the address book
+        card_data = vcard_obj.serialize()
+        vcard.set_vcard_data(card_data)
+        vcard.save()
         flash('Contact updated successfully')
     except Exception as e:
         logger.error(f"Error updating contact: {str(e)}")
@@ -241,8 +249,9 @@ def delete_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        abook = principal.address_book()
-        vcard = abook.get_vcard(contact_id)
+        address_books = principal.get_address_books()
+        abook = address_books[0]  # Get first available address book
+        vcard = next(abook.search(uid=contact_id))
         vcard.delete()
         flash('Contact deleted successfully')
         return redirect(url_for('contacts'))
