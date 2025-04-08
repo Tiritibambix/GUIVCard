@@ -111,20 +111,17 @@ def check_login_required(f):
 def health_check():
     try:
         client = get_carddav_client()
-        principal = client.principal()
-        collections = principal.addressbook_collections()
-        
-        if not collections:
+        abook = client.addressbook
+        if not abook:
             raise Exception("No address book found")
             
-        # Verify we can access the address book
-        abook = collections[0]
-        abook.search()  # This will fail if it's not a valid address book
+        # Verify we can access the address book by listing contacts
+        next(abook.search(), None)  # Try to get first contact, None if empty
             
         status = {
             'is_healthy': True,
-            'carddav_url': CARDDAV_URL,
-            'message': f'Successfully connected to address book: {abook.url}'
+            'carddav_url': str(abook.url),
+            'message': 'Successfully connected to address book'
         }
         return render_template('health.html', status=status)
     except Exception as e:
@@ -147,24 +144,21 @@ def get_carddav_client():
         principal = client.principal()
         logger.info("Connected to CardDAV server")
         
-        # Try to get the address book
+        # Get the address book home set
+        home_set = principal.addressbook_home_set()
+        logger.info("Found address book home set")
+        
+        # Try to get or create the address book
         try:
-            # Use the URL directly as an addressbook
-            abook = principal.make_addressbook(name="contacts", path=CARDDAV_URL)
+            abook = home_set.addressbook(CARDDAV_URL)
             logger.info("Using existing address book")
-            return client
-        except Exception as e:
-            logger.warning(f"Could not access address book: {str(e)}")
-            
-            # Try to find it in the principal's collections
-            collections = principal.addressbook_collections()
-            if collections:
-                logger.info("Found existing address book collection")
-                return client
-            else:
-                logger.warning("No address book found, creating new one")
-                principal.make_addressbook(name="contacts")
-                return client
+        except:
+            logger.info("Creating new address book")
+            abook = home_set.make_addressbook("Contacts")
+        
+        # Store the address book URL in the client object for later use
+        client.addressbook = abook
+        return client
                 
     except Exception as e:
         logger.error(f"Error connecting to CardDAV server: {str(e)}")
@@ -175,10 +169,11 @@ def get_carddav_client():
 def contacts():
     try:
         client = get_carddav_client()
-        principal = client.principal()
-        collections = principal.addressbook_collections()
-        if not collections:
-            raise Exception("No address book found")
+        abook = client.addressbook
+        if not abook:
+            logger.error("No address book available")
+            flash("Error: No address book available")
+            return render_template('index.html', contacts=[])
         abook = collections[0]
         
         if request.method == 'POST':
@@ -234,10 +229,11 @@ def contacts():
 def update_contact():
     try:
         client = get_carddav_client()
-        principal = client.principal()
-        collections = principal.addressbook_collections()
-        if not collections:
-            raise Exception("No address book found")
+        abook = client.addressbook
+        if not abook:
+            logger.error("No address book available")
+            flash("Error: No address book available")
+            return redirect(url_for('contacts'))
         abook = collections[0]
         
         contact_id = request.form['contact_id']
@@ -276,11 +272,11 @@ def update_contact():
 def delete_contact(contact_id):
     try:
         client = get_carddav_client()
-        principal = client.principal()
-        collections = principal.addressbook_collections()
-        if not collections:
-            raise Exception("No address book found")
-        abook = collections[0]
+        abook = client.addressbook
+        if not abook:
+            logger.error("No address book available")
+            flash("Error: No address book available")
+            return redirect(url_for('contacts'))
         # Search by path instead of UID
         path = f"{CARDDAV_URL}/{contact_id}"
         item = next(abook.search(path=path))
