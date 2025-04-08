@@ -7,6 +7,7 @@ import sys
 import requests
 from urllib.parse import urlparse
 import base64
+import uuid
 
 # Configure logging to write to stdout
 logging.basicConfig(
@@ -146,8 +147,7 @@ def get_carddav_client():
         session.headers.update({
             'User-Agent': 'GuiVCard/1.0',
             'Depth': '0',
-            'Prefer': 'return=representation',
-            'Accept': 'text/vcard,text/x-vcard'
+            'Accept': 'text/vcard'
         })
         
         # Verify address book access
@@ -179,23 +179,30 @@ def contacts():
         
         if request.method == 'POST':
             try:
-                # Construction propre du vCard
+                # Get and parse input data
                 name = request.form.get('name', '').strip()
                 email = request.form.get('email', '').strip()
                 phone = request.form.get('phone', '').strip()
 
-                vcard_lines = [
-                    "BEGIN:VCARD",
-                    "VERSION:3.0",
-                    f"FN:{name}",
-                    f"EMAIL:{email}",
-                    f"TEL:{phone}" if phone else "",  # ligne vide si pas de téléphone
-                    "END:VCARD"
-                ]
-                vcard_content = "\r\n".join([line for line in vcard_lines if line]) + "\r\n"
-                
+                # Simple name parsing (could be improved)
+                parts = name.split(' ', 1)
+                first_name = parts[0]
+                last_name = parts[1] if len(parts) > 1 else ''
+
+                # Create vCard with vobject for validation
+                vcard = vobject.vCard()
+                vcard.add('fn').value = name
+                vcard.add('n').value = vobject.vcard.Name(family=last_name, given=first_name)
+                vcard.add('email').value = email
+                if phone:
+                    vcard.add('tel').value = phone
+                vcard.add('uid').value = str(uuid.uuid4())
+
+                # Validate by parsing
+                vobject.readOne(vcard.serialize())
+                vcard_content = vcard.serialize()
                 logger.info(f"Creating vCard:\n{vcard_content}")
-                
+
                 # Generate a unique filename for the vCard
                 filename = f"{base64.urlsafe_b64encode(os.urandom(12)).decode()}.vcf"
                 url = f"{abook['url'].rstrip('/')}/{filename}"
@@ -204,7 +211,7 @@ def contacts():
                 response = abook['session'].put(
                     url,
                     data=vcard_content,
-                    headers={"Content-Type": "text/vcard; charset=utf-8"}
+                    headers={"Content-Type": "text/vcard"}
                 )
                 
                 if response.status_code not in (201, 204):
@@ -243,14 +250,29 @@ def contacts():
                     if card_response.status_code == 200:
                         try:
                             vcard_data = vobject.readOne(card_response.text)
+                            
+                            # Get name components
+                            fn = getattr(vcard_data, 'fn', None)
+                            name = fn.value if fn else "No Name"
+                            
+                            # Get email (first one if multiple exist)
+                            emails = vcard_data.contents.get('email', [])
+                            email = emails[0].value if emails else ''
+                            
+                            # Get phone (first one if multiple exist)
+                            tels = vcard_data.contents.get('tel', [])
+                            phone = tels[0].value if tels else ''
+                            
                             contacts.append({
                                 'id': href.split('/')[-1],
-                                'name': vcard_data.fn.value,
-                                'email': vcard_data.email.value if hasattr(vcard_data, 'email') else '',
-                                'phone': vcard_data.tel.value if hasattr(vcard_data, 'tel') else ''
+                                'name': name,
+                                'email': email,
+                                'phone': phone
                             })
+                            
+                            logger.debug(f"Parsed contact: {name} ({href})")
                         except Exception as e:
-                            logger.warning(f"Error parsing vCard {href}: {e}")
+                            logger.warning(f"Error parsing vCard {href}: {str(e)}\nContent: {card_response.text[:200]}")
         return render_template('index.html', contacts=contacts)
         
     except Exception as e:
@@ -273,20 +295,28 @@ def update_contact():
             raise Exception("Contact not found")
         
         # Create new vCard content
-        # Construction propre du vCard pour l'update
+        # Get and parse input data
         name = request.form.get('name', '').strip()
         email = request.form.get('email', '').strip()
         phone = request.form.get('phone', '').strip()
 
-        vcard_lines = [
-            "BEGIN:VCARD",
-            "VERSION:3.0",
-            f"FN:{name}",
-            f"EMAIL:{email}",
-            f"TEL:{phone}" if phone else "",
-            "END:VCARD"
-        ]
-        vcard_content = "\r\n".join([line for line in vcard_lines if line]) + "\r\n"
+        # Simple name parsing
+        parts = name.split(' ', 1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ''
+
+        # Create vCard
+        vcard = vobject.vCard()
+        vcard.add('fn').value = name
+        vcard.add('n').value = vobject.vcard.Name(family=last_name, given=first_name)
+        vcard.add('email').value = email
+        if phone:
+            vcard.add('tel').value = phone
+        vcard.add('uid').value = str(uuid.uuid4())
+
+        # Validate and serialize
+        vobject.readOne(vcard.serialize())
+        vcard_content = vcard.serialize()
         
         logger.info(f"Updating vCard at {url}:\n{vcard_content}")
 
@@ -295,7 +325,7 @@ def update_contact():
         response = abook['session'].put(
             url,
             data=vcard_content,
-            headers={"Content-Type": "text/vcard; charset=utf-8"}
+            headers={"Content-Type": "text/vcard"}
         )
         if response.status_code not in (200, 204):
             raise Exception(f"Failed to update contact: status {response.status_code}, body: {response.text}")
