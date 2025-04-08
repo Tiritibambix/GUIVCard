@@ -478,7 +478,19 @@ def update_contact():
         if note := request.form.get('note', '').strip():
             vcard_data["NOTE"] = note
             
-        # Generate vCard content
+        # Fetch existing vCard to get its UID
+        existing = abook['session'].get(url)
+        if existing.status_code != 200:
+            raise Exception(f"Could not fetch existing vCard for UID check: {existing.status_code}")
+        
+        try:
+            vobj = vobject.readOne(existing.text)
+            vcard_data["UID"] = vobj.uid.value  # Preserve the existing UID
+            logger.info(f"Reusing existing UID: {vobj.uid.value}")
+        except Exception as parse_err:
+            raise Exception(f"Failed to parse existing vCard for UID: {parse_err}")
+            
+        # Generate updated vCard content with preserved UID
         vcard_content = generate_vcard(vcard_data)
         logger.info(f"Updating vCard at {url}:\n{vcard_content}")
         
