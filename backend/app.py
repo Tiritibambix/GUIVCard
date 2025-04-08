@@ -134,12 +134,29 @@ def health_check():
         return render_template('health.html', status=status)
 
 def get_carddav_client():
-    client = caldav.DAVClient(
-        url=CARDDAV_URL,
-        username=ADMIN_USERNAME,
-        password=ADMIN_PASSWORD
-    )
-    return client
+    try:
+        client = caldav.DAVClient(
+            url=CARDDAV_URL,
+            username=ADMIN_USERNAME,
+            password=ADMIN_PASSWORD
+        )
+        # Test connection and log available resources
+        principal = client.principal()
+        logger.info("Connected to CardDAV server")
+        
+        homesets = principal.addressbook_homesets()
+        logger.info(f"Found {sum(1 for _ in homesets)} addressbook homesets")
+        
+        homeset = next(iter(principal.addressbook_homesets()))
+        logger.info(f"Using homeset: {homeset}")
+        
+        addressbooks = list(homeset.addressbooks())
+        logger.info(f"Found {len(addressbooks)} addressbooks")
+        
+        return client
+    except Exception as e:
+        logger.error(f"Error connecting to CardDAV server: {str(e)}")
+        raise
 
 @app.route('/contacts/<contact_id>', methods=['GET'])
 @check_login_required
@@ -147,8 +164,16 @@ def get_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        address_books = principal.get_address_books()
-        abook = address_books[0]  # Get first available address book
+        homesets = list(principal.addressbook_homesets())
+        if not homesets:
+            logger.error("No addressbook homesets found")
+            raise Exception("No addressbook homesets available")
+        homeset = homesets[0]
+        addressbooks = list(homeset.addressbooks())
+        if not addressbooks:
+            logger.error("No addressbooks found in homeset")
+            raise Exception("No addressbooks available")
+        abook = addressbooks[0]
         vcard = next(abook.search(uid=contact_id))
         
         contact = {
@@ -167,8 +192,18 @@ def get_contact(contact_id):
 def contacts():
     client = get_carddav_client()
     principal = client.principal()
-    address_books = principal.get_address_books()
-    abook = address_books[0]  # Get first available address book
+    homesets = list(principal.addressbook_homesets())
+    if not homesets:
+        logger.error("No addressbook homesets found")
+        flash("Error: No addressbook homesets available")
+        return render_template('index.html', contacts=[])
+    homeset = homesets[0]
+    addressbooks = list(homeset.addressbooks())
+    if not addressbooks:
+        logger.error("No addressbooks found in homeset")
+        flash("Error: No addressbooks available")
+        return render_template('index.html', contacts=[])
+    abook = addressbooks[0]
 
     if request.method == 'POST':
         try:
@@ -212,8 +247,14 @@ def update_contact():
     try:
         client = get_carddav_client()
         principal = client.principal()
-        address_books = principal.get_address_books()
-        abook = address_books[0]  # Get first available address book
+        homesets = list(principal.addressbook_homesets())
+        if not homesets:
+            raise Exception("No addressbook homesets available")
+        homeset = homesets[0]
+        addressbooks = list(homeset.addressbooks())
+        if not addressbooks:
+            raise Exception("No addressbooks available")
+        abook = addressbooks[0]
         
         contact_id = request.form['contact_id']
         vcard = next(abook.search(uid=contact_id))
@@ -249,8 +290,14 @@ def delete_contact(contact_id):
     try:
         client = get_carddav_client()
         principal = client.principal()
-        address_books = principal.get_address_books()
-        abook = address_books[0]  # Get first available address book
+        homesets = list(principal.addressbook_homesets())
+        if not homesets:
+            raise Exception("No addressbook homesets available")
+        homeset = homesets[0]
+        addressbooks = list(homeset.addressbooks())
+        if not addressbooks:
+            raise Exception("No addressbooks available")
+        abook = addressbooks[0]
         vcard = next(abook.search(uid=contact_id))
         vcard.delete()
         flash('Contact deleted successfully')
