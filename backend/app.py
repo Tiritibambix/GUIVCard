@@ -276,14 +276,8 @@ def contacts():
                 vcard_content = generate_vcard(vcard_data)
                 logger.debug(f"Generated vCard:\n{vcard_content}")
                 
-                # Try to validate syntax only
-                try:
-                    vobject.readOne(vcard_content)
-                except Exception as e:
-                    logger.warning(f"vCard syntax might be invalid: {e}")
-                    
+                # Generate vCard
                 logger.info(f"Creating vCard:\n{vcard_content}")
-
                 # Generate a unique filename for the vCard
                 filename = f"{base64.urlsafe_b64encode(os.urandom(12)).decode()}.vcf"
                 url = f"{abook['url'].rstrip('/')}/{filename}"
@@ -456,14 +450,9 @@ def update_contact():
             
         if note := request.form.get('note', '').strip():
             vcard_data["NOTE"] = note
-            
-        # Generate vCard content (with safe validation)
-        vcard_content = generate_vcard(vcard_data)
-        try:
-            vobject.readOne(vcard_content)
-        except Exception as e:
-            logger.warning(f"vCard syntax might be invalid: {e}")
-        logger.info(f"Updating vCard at {url}:\n{vcard_content}")
+            # Generate vCard content
+            vcard_content = generate_vcard(vcard_data)
+            logger.info(f"Updating vCard at {url}:\n{vcard_content}")
         
         # Update the contact
         response = abook['session'].put(
