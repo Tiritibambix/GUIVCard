@@ -407,34 +407,55 @@ def update_contact():
         url = f"{abook['url'].rstrip('/')}/{contact_id}"
         
         # Verify contact exists
+        logger.info(f"Checking if contact exists at {url}")
         response = abook['session'].request('PROPFIND', url, headers={'Depth': '0'})
-        if response.status_code != 207:
+        if response.status_code == 404:
             raise Exception("Contact not found")
+        elif response.status_code != 207:
+            raise Exception(f"Failed to verify contact: status {response.status_code}")
         
-        # Collect all contact data for update
-        name = request.form.get('name', '').strip()
+        # Process form data
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        full_name = f"{first_name} {last_name}".strip()
+        
         vcard_data = {
-            "FN": name,
-            "N": name,  # Will be split into last;first automatically
+            "FN": full_name,
+            "N": f"{last_name};{first_name};;;",  # Correct N format: last;first;;;
             "EMAIL": request.form.get('email', '').strip(),
         }
         
+        # Add optional fields
         if phone := request.form.get('phone', '').strip():
             vcard_data["TEL"] = phone
             
         if org := request.form.get('organization', '').strip():
             vcard_data["ORG"] = org
             
+        if url := request.form.get('url', '').strip():
+            vcard_data["URL"] = url
+            
+        if bday := request.form.get('birthday', '').strip():
+            vcard_data["BDAY"] = bday
+            
+        # Process address if any field is provided
+        address_fields = {
+            'street': request.form.get('street', '').strip(),
+            'city': request.form.get('city', '').strip(),
+            'postal': request.form.get('postal', '').strip(),
+            'country': request.form.get('country', '').strip()
+        }
+        if any(address_fields.values()):
+            vcard_data["ADR"] = address_fields
+            
         if note := request.form.get('note', '').strip():
             vcard_data["NOTE"] = note
-
+            
         # Generate and validate vCard content
         vcard_content = generate_vcard(vcard_data)
-        
         logger.info(f"Updating vCard at {url}:\n{vcard_content}")
-
+        
         # Update the contact
-        # Update with explicit headers
         response = abook['session'].put(
             url,
             data=vcard_content,
@@ -444,6 +465,7 @@ def update_contact():
             raise Exception(f"Failed to update contact: status {response.status_code}, body: {response.text}")
             
         flash('Contact updated successfully')
+        
     except Exception as e:
         logger.error(f"Error updating contact: {str(e)}")
         flash(f"Error updating contact: {str(e)}")

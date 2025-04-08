@@ -78,10 +78,13 @@
                                 {% if contact.url %}
                                 <p class="text-sm text-blue-500"><a href="{{ contact.url }}" target="_blank">{{ contact.url }}</a></p>
                                 {% endif %}
-                                {% if contact.address %}
+                                {% if contact.address and (contact.address.street or contact.address.city or contact.address.postal or contact.address.country) %}
                                 <p class="text-sm text-gray-500">
-                                    {{ contact.address.street }}, {{ contact.address.city }}<br>
-                                    {{ contact.address.postal }}, {{ contact.address.country }}
+                                    {% if contact.address.street %}{{ contact.address.street }}{% endif %}
+                                    {% if contact.address.city %}{% if contact.address.street %}, {% endif %}{{ contact.address.city }}{% endif %}
+                                    {% if contact.address.postal or contact.address.country %}<br>{% endif %}
+                                    {% if contact.address.postal %}{{ contact.address.postal }}{% endif %}
+                                    {% if contact.address.country %}{% if contact.address.postal %}, {% endif %}{{ contact.address.country }}{% endif %}
                                 </p>
                                 {% endif %}
                                 {% if contact.birthday %}
@@ -109,13 +112,13 @@
 
     <!-- Contact Modal Template -->
     <div id="contact-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden flex items-center justify-center">
-        <div class="bg-white rounded-lg p-8 max-w-md w-full">
+        <div class="bg-white rounded-lg p-8 max-w-2xl w-full">
             <h2 id="modal-title" class="text-xl font-bold mb-4">New Contact</h2>
             <form id="contact-form" method="POST" action="{{ url_for('contacts') }}"
                   class="space-y-4" enctype="multipart/form-data">
                 <input type="hidden" id="contact-id" name="contact_id">
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
+                    <div class="space-y-4">
                         <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
                         <input type="text" id="first_name" name="first_name" required placeholder="John"
                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
@@ -168,15 +171,15 @@
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-gray-700">Address</label>
                     <div class="grid grid-cols-2 gap-4">
-                        <input type="text" name="street" placeholder="Street"
+                        <input type="text" id="street" name="street" placeholder="Street"
                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        <input type="text" name="city" placeholder="City"
+                        <input type="text" id="city" name="city" placeholder="City"
                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                     <div class="grid grid-cols-2 gap-4">
-                        <input type="text" name="postal" placeholder="Postal Code"
+                        <input type="text" id="postal" name="postal" placeholder="Postal Code"
                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        <input type="text" name="country" placeholder="Country"
+                        <input type="text" id="country" name="country" placeholder="Country"
                                class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                 </div>
@@ -202,9 +205,19 @@
 
     <script>
         function showNewContactModal() {
+            // Reset form and title
             document.getElementById('modal-title').textContent = 'New Contact';
             document.getElementById('contact-form').reset();
+            
+            // Reset hidden fields and action
+            document.getElementById('contact-id').value = '';
             document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
+            
+            // Remove any preview images
+            const preview = document.getElementById('photo-preview');
+            if (preview) preview.remove();
+            
+            // Show modal
             document.getElementById('contact-modal').classList.remove('hidden');
         }
 
@@ -241,7 +254,7 @@
                 }
             });
 
-            document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
+            document.getElementById('contact-form').action = "{{ url_for('update_contact') }}";
             document.getElementById('contact-modal').classList.remove('hidden');
         }
 
@@ -260,6 +273,11 @@
             if (e.target === this) {
                 hideContactModal();
             }
+        });
+
+        // Prevent closing when clicking inside the modal content
+        document.querySelector('.bg-white').addEventListener('click', function(e) {
+            e.stopPropagation();
         });
 
         // Handle photo upload preview
@@ -281,17 +299,6 @@
             }
         });
 
-        // Reset photo preview when opening new contact modal
-        function showNewContactModal() {
-            document.getElementById('modal-title').textContent = 'New Contact';
-            document.getElementById('contact-form').reset();
-            const preview = document.getElementById('photo-preview');
-            if (preview) {
-                preview.remove();
-            }
-            document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
-            document.getElementById('contact-modal').classList.remove('hidden');
-        }
     </script>
 </body>
 </html>
