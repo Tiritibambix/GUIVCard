@@ -333,7 +333,10 @@ def contacts():
                     continue
                     
                 try:
+                    # First try to parse without validation
                     vcard_data = vobject.readOne(card_response.text)
+                    
+                    # If successful, extract data safely
                     contact_info = {
                         'id': href.split('/')[-1],
                         'name': getattr(vcard_data.fn, 'value', 'No Name'),
@@ -347,46 +350,71 @@ def contacts():
                         'address': None
                     }
 
-                    # Get standard fields
-                    if 'email' in vcard_data.contents:
-                        contact_info['email'] = vcard_data.email.value
+                    # Safely get each field
+                    try:
+                        if 'email' in vcard_data.contents:
+                            contact_info['email'] = vcard_data.email.value
+                    except Exception:
+                        logger.debug(f"Could not parse email for contact {href}")
 
-                    if 'tel' in vcard_data.contents:
-                        contact_info['phone'] = vcard_data.tel.value
+                    try:
+                        if 'tel' in vcard_data.contents:
+                            contact_info['phone'] = vcard_data.tel.value
+                    except Exception:
+                        logger.debug(f"Could not parse phone for contact {href}")
 
-                    if 'org' in vcard_data.contents:
-                        contact_info['org'] = vcard_data.org.value[0]
+                    try:
+                        if 'org' in vcard_data.contents:
+                            contact_info['org'] = vcard_data.org.value[0]
+                    except Exception:
+                        logger.debug(f"Could not parse org for contact {href}")
 
-                    if 'url' in vcard_data.contents:
-                        contact_info['url'] = vcard_data.url.value
+                    try:
+                        if 'url' in vcard_data.contents:
+                            contact_info['url'] = vcard_data.url.value.strip('<>')
+                    except Exception:
+                        logger.debug(f"Could not parse URL for contact {href}")
 
-                    if 'bday' in vcard_data.contents:
-                        contact_info['birthday'] = vcard_data.bday.value
+                    try:
+                        if 'bday' in vcard_data.contents:
+                            contact_info['birthday'] = vcard_data.bday.value
+                    except Exception:
+                        logger.debug(f"Could not parse birthday for contact {href}")
 
-                    if 'note' in vcard_data.contents:
-                        contact_info['note'] = vcard_data.note.value
+                    try:
+                        if 'note' in vcard_data.contents:
+                            contact_info['note'] = vcard_data.note.value
+                    except Exception:
+                        logger.debug(f"Could not parse note for contact {href}")
 
-                    # Process photo if present
-                    if 'photo' in vcard_data.contents:
-                        photo = vcard_data.photo.value
-                        if isinstance(photo, bytes):
-                            contact_info['photo'] = base64.b64encode(photo).decode('utf-8')
+                    # Process photo carefully
+                    try:
+                        if 'photo' in vcard_data.contents:
+                            photo = vcard_data.photo.value
+                            if isinstance(photo, bytes):
+                                contact_info['photo'] = base64.b64encode(photo).decode('utf-8')
+                    except Exception:
+                        logger.debug(f"Could not parse photo for contact {href}")
 
-                    # Process address if present
-                    if 'adr' in vcard_data.contents:
-                        adr = vcard_data.adr.value
-                        contact_info['address'] = {
-                            'street': adr.street or '',
-                            'city': adr.city or '',
-                            'postal': adr.code or '',
-                            'country': adr.country or ''
-                        }
+                    # Process address carefully
+                    try:
+                        if 'adr' in vcard_data.contents:
+                            adr = vcard_data.adr.value
+                            contact_info['address'] = {
+                                'street': adr.street or '',
+                                'city': adr.city or '',
+                                'postal': adr.code or '',
+                                'country': adr.country or ''
+                            }
+                    except Exception:
+                        logger.debug(f"Could not parse address for contact {href}")
                     
                     contacts.append(contact_info)
                     logger.debug(f"Parsed contact: {contact_info['name']} ({href})")
                     
                 except Exception as e:
-                    logger.warning(f"Error parsing vCard {href}: {str(e)}\nContent: {card_response.text[:200]}")
+                    logger.warning(f"Could not parse vCard {href}: {e}")
+                    continue
                     continue
         else:
             logger.error(f"Failed to list contacts: {response.status_code}")
