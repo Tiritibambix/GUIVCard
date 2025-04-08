@@ -245,8 +245,8 @@ def contacts():
                     vcard_data["ORG"] = org
 
                 # Store URL as-is if provided
-                if url := request.form.get('url', '').strip():
-                    vcard_data["URL"] = url
+                if contact_url := request.form.get('url', '').strip():
+                    vcard_data["URL"] = contact_url
 
                 if bday := request.form.get('birthday', '').strip():
                     vcard_data["BDAY"] = bday
@@ -459,8 +459,8 @@ def update_contact():
         if org := request.form.get('organization', '').strip():
             vcard_data["ORG"] = org
             
-        if url := request.form.get('url', '').strip():
-            vcard_data["URL"] = url
+        if website_url := request.form.get('url', '').strip():
+            vcard_data["URL"] = website_url
             
         if bday := request.form.get('birthday', '').strip():
             vcard_data["BDAY"] = bday
@@ -477,9 +477,10 @@ def update_contact():
             
         if note := request.form.get('note', '').strip():
             vcard_data["NOTE"] = note
-            # Generate vCard content
-            vcard_content = generate_vcard(vcard_data)
-            logger.info(f"Updating vCard at {url}:\n{vcard_content}")
+            
+        # Generate vCard content
+        vcard_content = generate_vcard(vcard_data)
+        logger.info(f"Updating vCard at {url}:\n{vcard_content}")
         
         # Update the contact
         response = abook['session'].put(
