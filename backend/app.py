@@ -144,25 +144,24 @@ def get_carddav_client():
             username=ADMIN_USERNAME,
             password=ADMIN_PASSWORD
         )
-        # Test connection and get principal
         principal = client.principal()
         logger.info("Connected to CardDAV server")
+
+        addressbooks = principal.addressbooks()
+        if not addressbooks:
+            raise Exception("No address book found")
         
-        # Try to use the URL directly as an address book
-        try:
-            abook = caldav.AddressBook(client=client, url=CARDDAV_URL)
-            # Test if we can use it
-            abook.date_search()  # This will fail if not an address book
-            logger.info(f"Using address book at: {abook.url}")
-            return client, abook
-            
-        except Exception as e:
-            logger.error(f"Could not access address book: {str(e)}")
-            raise Exception("Could not access address book - verify URL points to a CardDAV collection")
-                
+        # Use first available address book
+        abook = addressbooks[0]
+        logger.info(f"Using address book: {abook.url}")
+
+        # Store reference for convenience
+        client.addressbook = abook
+        return client, abook
+        
     except Exception as e:
         logger.error(f"Error connecting to CardDAV server: {str(e)}")
-        raise
+        raise Exception(f"Could not access address book - {str(e)}")
 
 @app.route('/contacts', methods=['GET', 'POST'])
 @check_login_required
