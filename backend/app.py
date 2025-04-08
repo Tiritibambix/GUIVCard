@@ -145,13 +145,18 @@ def get_carddav_client():
         session.auth = (ADMIN_USERNAME, ADMIN_PASSWORD)
         session.headers.update({
             'User-Agent': 'GuiVCard/1.0',
-            'Content-Type': 'text/vcard; charset=utf-8'
+            'Depth': '0',
+            'Prefer': 'return=representation',
+            'Accept': 'text/vcard,text/x-vcard'
         })
         
         # Verify address book access
-        response = session.request('PROPFIND', CARDDAV_URL, headers={'Depth': '0'})
+        response = session.request('PROPFIND', CARDDAV_URL)
         if response.status_code != 207:
-            raise Exception(f"Failed to access address book: status {response.status_code}")
+            raise Exception(
+                f"Failed to access address book: status {response.status_code}\n"
+                f"Response: {response.text[:200]}"  # First 200 chars for debug
+            )
             
         logger.info(f"Successfully connected to CardDAV server at {CARDDAV_URL}")
         
@@ -174,21 +179,36 @@ def contacts():
         
         if request.method == 'POST':
             try:
-                # Create new vCard content
-                vcard_content = f"""BEGIN:VCARD
-VERSION:3.0
-FN:{request.form['name']}
-EMAIL:{request.form['email']}
-{f'TEL:{request.form["phone"]}' if request.form.get('phone') else ''}
-END:VCARD"""
+                # Construction propre du vCard
+                name = request.form.get('name', '').strip()
+                email = request.form.get('email', '').strip()
+                phone = request.form.get('phone', '').strip()
+
+                vcard_lines = [
+                    "BEGIN:VCARD",
+                    "VERSION:3.0",
+                    f"FN:{name}",
+                    f"EMAIL:{email}",
+                    f"TEL:{phone}" if phone else "",  # ligne vide si pas de téléphone
+                    "END:VCARD"
+                ]
+                vcard_content = "\r\n".join([line for line in vcard_lines if line]) + "\r\n"
+                
+                logger.info(f"Creating vCard:\n{vcard_content}")
                 
                 # Generate a unique filename for the vCard
                 filename = f"{base64.urlsafe_b64encode(os.urandom(12)).decode()}.vcf"
                 url = f"{abook['url'].rstrip('/')}/{filename}"
+                # PUT the new vCard with explicit headers
+                logger.info(f"PUT contact to: {url}")
+                response = abook['session'].put(
+                    url,
+                    data=vcard_content,
+                    headers={"Content-Type": "text/vcard; charset=utf-8"}
+                )
                 
-                # PUT the new vCard
-                response = abook['session'].put(url, data=vcard_content)
                 if response.status_code not in (201, 204):
+                    raise Exception(f"Failed to create contact: status {response.status_code}, body: {response.text}")
                     raise Exception(f"Failed to create contact: status {response.status_code}")
                 
                 flash('Contact created successfully')
@@ -200,8 +220,15 @@ END:VCARD"""
         
         # List contacts via PROPFIND
         contacts = []
-        response = abook['session'].request('PROPFIND', abook['url'], headers={'Depth': '1'})
+        # List all contacts with Depth: 1
+        response = abook['session'].request(
+            'PROPFIND',
+            abook['url'],
+            headers={'Depth': '1'}  # Override default Depth: 0
+        )
+        
         if response.status_code == 207:
+            logger.info(f"Found contacts in address book: {abook['url']}")
             # Parse XML response
             from xml.etree import ElementTree
             root = ElementTree.fromstring(response.content)
@@ -246,17 +273,32 @@ def update_contact():
             raise Exception("Contact not found")
         
         # Create new vCard content
-        vcard_content = f"""BEGIN:VCARD
-VERSION:3.0
-FN:{request.form['name']}
-EMAIL:{request.form['email']}
-{f'TEL:{request.form["phone"]}' if request.form.get('phone') else ''}
-END:VCARD"""
+        # Construction propre du vCard pour l'update
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip()
+        phone = request.form.get('phone', '').strip()
+
+        vcard_lines = [
+            "BEGIN:VCARD",
+            "VERSION:3.0",
+            f"FN:{name}",
+            f"EMAIL:{email}",
+            f"TEL:{phone}" if phone else "",
+            "END:VCARD"
+        ]
+        vcard_content = "\r\n".join([line for line in vcard_lines if line]) + "\r\n"
+        
+        logger.info(f"Updating vCard at {url}:\n{vcard_content}")
 
         # Update the contact
-        response = abook['session'].put(url, data=vcard_content)
+        # Update with explicit headers
+        response = abook['session'].put(
+            url,
+            data=vcard_content,
+            headers={"Content-Type": "text/vcard; charset=utf-8"}
+        )
         if response.status_code not in (200, 204):
-            raise Exception(f"Failed to update contact: status {response.status_code}")
+            raise Exception(f"Failed to update contact: status {response.status_code}, body: {response.text}")
             
         flash('Contact updated successfully')
     except Exception as e:
