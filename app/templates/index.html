@@ -91,13 +91,9 @@
                                     </a>
                                 </p>
                                 {% endif %}
-                                {% if contact.address and (contact.address.street or contact.address.city or contact.address.postal or contact.address.country) %}
+                                {% if contact.address and (contact.address.street or contact.address.postal or contact.address.city or contact.address.country) %}
                                 <p class="text-sm text-gray-500">
-                                    {% if contact.address.street %}{{ contact.address.street }}{% endif %}
-                                    {% if contact.address.city %}{% if contact.address.street %}, {% endif %}{{ contact.address.city }}{% endif %}
-                                    {% if contact.address.postal or contact.address.country %}<br>{% endif %}
-                                    {% if contact.address.postal %}{{ contact.address.postal }}{% endif %}
-                                    {% if contact.address.country %}{% if contact.address.postal %}, {% endif %}{{ contact.address.country }}{% endif %}
+                                    {{ contact.address.street }}{% if contact.address.postal %}, {{ contact.address.postal }}{% endif %}{% if contact.address.city %}, {{ contact.address.city }}{% endif %}{% if contact.address.country %}, {{ contact.address.country }}{% endif %}
                                 </p>
                                 {% endif %}
                                 {% if contact.birthday %}
