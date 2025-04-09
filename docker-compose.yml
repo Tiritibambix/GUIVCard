@@ -1,5 +1,5 @@
 services:
-  app:
+  guivcard:
     image: tiritibambix/guivcard:latest
     ports:
       - "8190:5000"

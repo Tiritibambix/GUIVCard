@@ -39,7 +39,12 @@
                     New Contact
                 </button>
             </div>
+<!-- 🔍 Ajout dans le <main> au-dessus de la liste -->
+<div class="mb-4">
+    <input id="search" type="text" placeholder="Search contacts..." class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm" />
+</div>
 
+<div class="bg-white shadow overflow-hidden sm:rounded-md">
             <div class="bg-white shadow overflow-hidden sm:rounded-md">
                 <ul class="divide-y divide-gray-200" id="contact-list">
                     {% for contact in contacts %}
@@ -305,7 +310,24 @@
                 reader.readAsDataURL(file);
             }
         });
+</script>
+<!-- 🧠 Script de filtrage dynamique -->
+<script>
+document.getElementById('search').addEventListener('input', function(e) {
+    const query = e.target.value.toLowerCase();
+    const contacts = document.querySelectorAll('#contact-list > li');
 
+    contacts.forEach(contact => {
+        const name = contact.dataset.name?.toLowerCase() || '';
+        const email = contact.dataset.email?.toLowerCase() || '';
+        const phone = contact.dataset.phone?.toLowerCase() || '';
+        const org = contact.dataset.organization?.toLowerCase() || '';
+
+        const match = name.includes(query) || email.includes(query) || phone.includes(query) || org.includes(query);
+        contact.style.display = match ? '' : 'none';
+    });
+});
+</script>
     </script>
 </body>
 </html>
