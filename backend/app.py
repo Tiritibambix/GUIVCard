@@ -467,6 +467,9 @@ def update_contact():
             raise Exception(f"Could not fetch existing vCard for UID check: {existing.status_code}")
         
         try:
+            # Initialize vcard_data before use
+            vcard_data = {}
+            
             vobj = vobject.readOne(existing.text)
             vcard_data["UID"] = vobj.uid.value  # Preserve the existing UID
             logger.info(f"Reusing existing UID: {vobj.uid.value}")
