@@ -46,6 +46,8 @@
                     <li class="px-6 py-4 flex items-center justify-between"
                         data-contact-id="{{ contact.id }}"
                         data-name="{{ contact.name }}"
+                        data-first-name="{{ contact.first_name }}"
+                        data-last-name="{{ contact.last_name }}"
                         data-email="{{ contact.email }}"
                         data-phone="{{ contact.phone }}"
                         data-organization="{{ contact.org }}"
@@ -237,8 +239,8 @@
 
             // Fill all form fields from data attributes
             const fields = {
-                'first_name': row.dataset.name.split(';')[1] || '',
-                'last_name': row.dataset.name.split(';')[0] || '',
+                'first_name': row.dataset.firstName || '',
+                'last_name': row.dataset.lastName || '',
                 'email': row.dataset.email || '',
                 'phone': row.dataset.phone || '',
                 'organization': row.dataset.organization || '',

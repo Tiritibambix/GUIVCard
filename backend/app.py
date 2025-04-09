@@ -349,6 +349,8 @@ def contacts():
                     contact_info = {
                         'id': href.split('/')[-1],
                         'name': getattr(vcard_data.fn, 'value', 'No Name'),
+                        'first_name': '',
+                        'last_name': '',
                         'email': '',
                         'phone': '',
                         'org': '',
@@ -359,7 +361,15 @@ def contacts():
                         'address': None
                     }
 
-                    # Safely get each field
+                    # Parse name components
+                    try:
+                        if 'n' in vcard_data.contents:
+                            contact_info['first_name'] = vcard_data.n.value.given or ''
+                            contact_info['last_name'] = vcard_data.n.value.family or ''
+                    except Exception:
+                        logger.debug(f"Could not parse N field for contact {href}")
+
+                    # Parse other fields
                     try:
                         if 'email' in vcard_data.contents:
                             contact_info['email'] = vcard_data.email.value
