@@ -466,15 +466,16 @@ def update_contact():
         if existing.status_code != 200:
             raise Exception(f"Could not fetch existing vCard for UID check: {existing.status_code}")
         
+        # Initialize vcard_data
+        vcard_data = {}
+        
         try:
-            # Initialize vcard_data before use
-            vcard_data = {}
-            
+            # Get existing vCard data first
             vobj = vobject.readOne(existing.text)
             vcard_data["UID"] = vobj.uid.value  # Preserve the existing UID
             logger.info(f"Reusing existing UID: {vobj.uid.value}")
             
-            # Handle photo preservation
+            # Handle photo: keep existing unless new one uploaded
             photo_file = request.files.get('photo')
             if photo_file and photo_file.filename:
                 vcard_data["PHOTO"] = photo_file.read()
@@ -489,11 +490,12 @@ def update_contact():
         last_name = request.form.get('last_name', '').strip()
         full_name = f"{first_name} {last_name}".strip()
         
-        vcard_data = {
+        # Update other fields without overwriting vcard_data
+        vcard_data.update({
             "FN": full_name,
             "N": f"{last_name};{first_name};;;",  # Correct N format: last;first;;;
             "EMAIL": request.form.get('email', '').strip(),
-        }
+        })
         
         # Add optional fields
         if phone := request.form.get('phone', '').strip():
