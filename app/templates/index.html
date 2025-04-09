@@ -97,7 +97,7 @@
                                 </p>
                                 {% endif %}
                                 {% if contact.birthday %}
-                                <p class="text-sm text-gray-500">Birthday: {{ contact.birthday }}</p>
+                                <p class="text-sm text-gray-500">Birthday: {{ contact.birthday.replace('-', '/') if contact.birthday and '-' in contact.birthday else contact.birthday }}</p>
                                 {% endif %}
                                 {% if contact.note %}
                                 <p class="text-sm text-gray-400 mt-1 italic">{{ contact.note }}</p>
@@ -168,7 +168,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label for="birthday" class="block text-sm font-medium text-gray-700">Birthday</label>
-                        <input type="date" id="birthday" name="birthday"
+                        <input type="text" id="birthday" name="birthday" placeholder="dd/mm/yyyy"
                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                     <div>
