@@ -461,6 +461,26 @@ def update_contact():
         elif response.status_code != 207:
             raise Exception(f"Failed to verify contact: status {response.status_code}")
         
+        # Fetch existing vCard to get its UID and photo
+        existing = abook['session'].get(url)
+        if existing.status_code != 200:
+            raise Exception(f"Could not fetch existing vCard for UID check: {existing.status_code}")
+        
+        try:
+            vobj = vobject.readOne(existing.text)
+            vcard_data["UID"] = vobj.uid.value  # Preserve the existing UID
+            logger.info(f"Reusing existing UID: {vobj.uid.value}")
+            
+            # Handle photo preservation
+            photo_file = request.files.get('photo')
+            if photo_file and photo_file.filename:
+                vcard_data["PHOTO"] = photo_file.read()
+            elif 'photo' in vobj.contents:
+                vcard_data["PHOTO"] = vobj.photo.value
+                logger.debug("Preserved existing photo")
+        except Exception as parse_err:
+            raise Exception(f"Failed to parse existing vCard: {parse_err}")
+        
         # Process form data
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
