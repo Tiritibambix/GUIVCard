@@ -318,12 +318,26 @@ document.getElementById('search').addEventListener('input', function(e) {
     const contacts = document.querySelectorAll('#contact-list > li');
 
     contacts.forEach(contact => {
-        const name = contact.dataset.name?.toLowerCase() || '';
-        const email = contact.dataset.email?.toLowerCase() || '';
-        const phone = contact.dataset.phone?.toLowerCase() || '';
+        const fn = contact.dataset.name?.toLowerCase() || '';
+        const n = contact.dataset.firstName?.toLowerCase() + ' ' + contact.dataset.lastName?.toLowerCase() || '';
         const org = contact.dataset.organization?.toLowerCase() || '';
+        const email = contact.dataset.email?.toLowerCase() || '';
+        const tel = contact.dataset.phone?.toLowerCase() || '';
+        const adr = (contact.dataset.street?.toLowerCase() || '') + ' ' +
+                   (contact.dataset.city?.toLowerCase() || '') + ' ' +
+                   (contact.dataset.postal?.toLowerCase() || '') + ' ' +
+                   (contact.dataset.country?.toLowerCase() || '');
+        const url = contact.dataset.url?.toLowerCase() || '';
+        const note = contact.dataset.note?.toLowerCase() || '';
 
-        const match = name.includes(query) || email.includes(query) || phone.includes(query) || org.includes(query);
+        const match = fn.includes(query) ||
+                     n.includes(query) ||
+                     org.includes(query) ||
+                     email.includes(query) ||
+                     tel.includes(query) ||
+                     adr.includes(query) ||
+                     url.includes(query) ||
+                     note.includes(query);
         contact.style.display = match ? '' : 'none';
     });
 });

@@ -107,4 +107,4 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ env.APP_IMAGE }}
           readme-filepath: ./README.md
-          short-description: "GuiVCard - A modern CardDAV web interface"
+          short-description: "GuiVCard - A simple CardDAV web interface"
