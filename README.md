@@ -1,23 +1,21 @@
 # GuiVCard
 
-A modern CardDAV client with web interface.
+A CardDAV client with web interface.
 
 ## Tech Stack
-
-- Backend: Python + Flask
-- Frontend: React + TypeScript
-- CardDAV Client: caldav (Python)
+- Python + Flask
+- CardDAV Client: caldav
 - Authentication: Basic auth
 - UI: Tailwind CSS
 - Deployment: Docker
+- Deployment: Docker
 
-## Docker Images
+## Docker Image
 
-Pre-built Docker images are available on Docker Hub:
-- Backend: `tiritibambix/guivcard-backend`
-- Frontend: `tiritibambix/guivcard-frontend`
+Pre-built Docker image is available on Docker Hub:
+`tiritibambix/guivcard`
 
-Images are built automatically for both amd64 and arm64 architectures.
+Image is built automatically for amd64 architecture.
 
 ## Features
 
@@ -34,10 +32,9 @@ Edit the docker-compose.yml file and replace the placeholders:
 
 ```yaml
 environment:
-  - CARDDAV_URL=https://your.carddav-server.com/admin/contacts/
+  - CARDDAV_URL=https://your.carddav-server.com/username/contacts/
   - ADMIN_USERNAME=your_username
   - ADMIN_PASSWORD=your_password
-  - CORS_ORIGIN=http://YOUR_SERVER_IP:8190
 ```
 
 Replace:
@@ -54,27 +51,21 @@ Replace:
 docker-compose up -d
 ```
 
-## Ports
+## Port
 
-The application uses the following ports:
-- Backend API: 8195
-- Frontend UI: 8190
+The application runs on port 8190.
 
 Access the application at http://YOUR_SERVER_IP:8190
 
 ## Authentication
 
-The application uses a simple authentication flow:
-1. Frontend authenticates with backend using Basic Auth
-2. Backend uses the same credentials to authenticate with the CardDAV server
-3. All credentials are configured in docker-compose.yml
+The application uses Basic Auth with the credentials configured in docker-compose.yml to authenticate with the CardDAV server.
 
 ## Security Notes
 
 - Never commit passwords or sensitive information to the repository
 - Use HTTPS in production
 - Keep your modified docker-compose.yml secure and never commit it
-- The backend acts as a secure proxy between the frontend and CardDAV server
 
 ## Development
 

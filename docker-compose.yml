@@ -1,6 +1,6 @@
 services:
-  backend:
-    image: tiritibambix/guivcard-backend:latest
+  app:
+    image: tiritibambix/guivcard:latest
     ports:
       - "8190:5000"
     environment:
