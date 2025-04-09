@@ -15,7 +15,7 @@ A CardDAV client with web interface.
 Pre-built Docker image is available on Docker Hub:
 `tiritibambix/guivcard`
 
-Image is built automatically for amd64 architecture.
+Image is built automatically for amd64 and arm64 architectures.
 
 ## Features
 
