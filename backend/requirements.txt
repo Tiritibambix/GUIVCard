@@ -1,7 +1,8 @@
 Flask==2.3.3
 flask-cors==4.0.2
 caldav==1.4.0
-requests==2.32.0
-vobject==0.9.6
+requests==2.31.0  # Using stable version without CVE issues
+vobject==0.9.6.1  # Using newer version with wheel support
 Werkzeug==3.0.6
 urllib3>=2.0.0
+setuptools  # Required for vobject installation
