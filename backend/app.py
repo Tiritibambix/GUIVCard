@@ -149,10 +149,15 @@ def generate_vcard(data: Dict[str, str]) -> str:
         lines.append(f"FN:{fn}")
 
     if data.get("N"):
-        n_parts = data["N"].split(" ", 1)
-        last = n_parts[0]
-        first = n_parts[1] if len(n_parts) > 1 else ""
-        lines.append(f"N:{last};{first};;;")
+        if ";" in data["N"]:
+            # Already formatted as N:last;first;;;
+            lines.append(f"N:{data['N']}")
+        else:
+            # Parse name into last;first
+            n_parts = data["N"].split(" ", 1)
+            last = n_parts[0]
+            first = n_parts[1] if len(n_parts) > 1 else ""
+            lines.append(f"N:{last};{first};;;")
 
     if org := data.get("ORG"):
         lines.append(f"ORG:{org}")
@@ -165,7 +170,12 @@ def generate_vcard(data: Dict[str, str]) -> str:
 
     if adr := data.get("ADR"):
         lines.append(
-            f"ADR:;;{adr.get('street','')};{adr.get('city','')};;{adr.get('postal','')};{adr.get('country','')}"
+            "ADR:;;{street};{city};;{postal};{country}".format(
+                street=str(adr.get("street", "")),
+                city=str(adr.get("city", "")),
+                postal=str(adr.get("postal", "")),
+                country=str(adr.get("country", ""))
+            )
         )
 
     if url := data.get("URL"):
@@ -500,7 +510,7 @@ def update_contact():
             data=vcard_content,
             headers={"Content-Type": "text/vcard"}
         )
-        if response.status_code not in (200, 204):
+        if response.status_code not in (200, 201, 204):
             raise Exception(f"Failed to update contact: status {response.status_code}, body: {response.text}")
             
         flash('Contact updated successfully')
