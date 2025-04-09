@@ -38,7 +38,7 @@ environment:
 ```
 
 Replace:
-- `your.carddav-server.com/admin/contacts/` with the full URL to your CardDAV address book
+- `your.carddav-server.com/username/contacts/` with the full URL to your CardDAV address book
   - For Radicale, it's typically `https://radicale.example.com/username/contacts/`
   - You can find this URL in your Radicale web interface
 - `your_username` with your CardDAV username
