@@ -486,13 +486,15 @@ def get_cached_contacts(client, abook, force_refresh=False):
         logger.info("Fetching contacts from server...")
         try:
             contacts = fetch_contacts_from_server(client, abook)
+            if not contacts:
+                raise Exception("No contacts fetched from server.")
             _contacts_cache["data"] = contacts
             _contacts_cache["timestamp"] = now
             logger.info("Contacts successfully fetched and cached.")
             return contacts
         except Exception as e:
-            logger.error(f"Critical error fetching contacts: {str(e)}")
-            return []
+            logger.critical(f"Critical error fetching contacts: {str(e)}")
+            raise
 
         contacts = fetch_contacts_from_server(client, abook)
         _contacts_cache["data"] = contacts
