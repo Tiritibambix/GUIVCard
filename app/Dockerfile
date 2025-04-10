@@ -26,6 +26,7 @@ RUN pip install --upgrade pip setuptools wheel && \
 
 # Copy remaining application code
 COPY app.py .
+COPY database.py .
 
 # Set environment variables
 ENV FLASK_APP=app.py

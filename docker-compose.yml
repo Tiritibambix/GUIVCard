@@ -8,6 +8,8 @@ services:
       - CARDDAV_URL=https://your.carddav-server.com/user/contacts/
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    volumes:
+      - ./app/contacts.db:/app/contacts.db
     healthcheck:
       test: ["CMD", "curl", "-f", "-u", "${ADMIN_USERNAME}:${ADMIN_PASSWORD}", "http://localhost:5000/health"]
       interval: 30s
