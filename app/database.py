@@ -2,7 +2,7 @@ import sqlite3
 
 import os
 
-DATABASE_FILE = os.path.join(os.getcwd(), "contacts.db")
+DATABASE_FILE = os.environ.get("DATABASE_FILE", os.path.join(os.getcwd(), "contacts.db"))
 
 def init_db():
     """Initialize the SQLite database and create the contacts table if it doesn't exist."""
