@@ -9,33 +9,6 @@ from urllib.parse import urlparse
 import base64
 import uuid
 from typing import Dict
-from database import init_db, add_contact, get_all_contacts, update_contact, delete_contact
-# Removed circular import for fetch_contacts_from_server
-import os
-import schedule
-import time
-
-# Schedule contact sync if CRON_SYNC_SCHEDULE is set
-cron_schedule = os.environ.get("CRON_SYNC_SCHEDULE")
-if cron_schedule:
-    def scheduled_sync():
-        logger.info("Scheduled sync triggered. Fetching contacts from server...")
-        fetch_contacts_from_server()
-        logger.info("Scheduled sync completed successfully.")
-    
-    schedule.every().day.at("04:00").do(scheduled_sync)  # Default to 4 AM if no specific time is provided
-
-    def run_scheduler():
-        while True:
-            schedule.run_pending()
-            time.sleep(1)
-
-    # Start the scheduler in a separate thread
-    import threading
-    threading.Thread(target=run_scheduler, daemon=True).start()
-
-# Initialize the database
-init_db()
 
 # Configure logging to write to stdout
 logging.basicConfig(
@@ -261,26 +234,6 @@ def get_carddav_client():
 @app.route('/contacts', methods=['GET', 'POST'])
 @check_login_required
 def contacts():
-    # Fetch contacts only if the database is empty
-    if not get_all_contacts():
-        logger.info("Database is empty. Fetching contacts from server...")
-        # Inline definition of fetch_contacts_from_server to avoid circular import
-        def fetch_contacts_from_server():
-            logger.info("Fetching contacts from server...")
-            # Add logic to fetch and store contacts in the database
-            logger.info("Contacts fetched and stored successfully.")
-        fetch_contacts_from_server()
-        logger.info("Contacts fetched and stored in the database.")
-    return render_template('contacts.html')
-
-@app.route('/sync-contacts', methods=['POST'])
-@check_login_required
-def sync_contacts():
-    logger.info("Manual sync triggered. Fetching contacts from server...")
-    fetch_contacts_from_server()
-    logger.info("Contacts synchronized successfully.")
-    flash("Contacts synchronized successfully.")
-    return redirect(url_for('contacts'))
     try:
         client, abook = get_carddav_client()
         
@@ -496,8 +449,8 @@ def sync_contacts():
         else:
             logger.error(f"Failed to list contacts: {response.status_code}")
         contacts.sort(key=lambda c: (
-            (str(c['last_name']).strip().lower() if c.get('last_name') else ''),
-            (str(c['first_name']).strip().lower() if c.get('first_name') else '')
+            (c['last_name'] or '').strip().lower(),
+            (c['first_name'] or '').strip().lower()
         ))
         return render_template('index.html', contacts=contacts)
         
