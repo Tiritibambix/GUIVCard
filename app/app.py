@@ -480,7 +480,7 @@ def get_cached_contacts(client, abook, force_refresh=False):
             return _contacts_cache["data"]
 
         # Ensure response is initialized before use
-        response = None
+        response = {"status_code": None, "content": None}
 
         contacts = fetch_contacts_from_server(client, abook)
         _contacts_cache["data"] = contacts

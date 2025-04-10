@@ -84,7 +84,7 @@ jobs:
           context: ./app
           file: ./app/Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64 #,linux/arm64
           tags: |
             ${{ env.REGISTRY }}/${{ env.APP_IMAGE }}:latest
             ${{ env.REGISTRY }}/${{ env.APP_IMAGE }}:${{ needs.setup.outputs.version }}
