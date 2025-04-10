@@ -8,7 +8,8 @@ services:
       - CARDDAV_URL=https://your.carddav-server.com/user/contacts/
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - DATABASE_FILE=/app/contacts.db
+      - CRON_SYNC_SCHEDULE=${CRON_SYNC_SCHEDULE:-"0 4 * * *"}
+      - DATABASE_FILE=./contacts.db
     volumes:
       - ./app/contacts.db:/app/contacts.db
     healthcheck:
