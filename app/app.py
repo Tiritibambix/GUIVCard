@@ -271,6 +271,7 @@ def contacts():
             logger.info("Contacts fetched and stored successfully.")
         fetch_contacts_from_server()
         logger.info("Contacts fetched and stored in the database.")
+    return render_template('contacts.html')
 
 @app.route('/sync-contacts', methods=['POST'])
 @check_login_required
