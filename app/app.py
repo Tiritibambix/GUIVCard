@@ -479,6 +479,9 @@ def get_cached_contacts(client, abook, force_refresh=False):
         if not force_refresh and _contacts_cache["data"] and (now - _contacts_cache["timestamp"]) < CACHE_DURATION:
             return _contacts_cache["data"]
 
+        # Ensure response is initialized before use
+        response = None
+
         contacts = fetch_contacts_from_server(client, abook)
         _contacts_cache["data"] = contacts
         _contacts_cache["timestamp"] = now
