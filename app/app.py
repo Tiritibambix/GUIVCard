@@ -474,21 +474,24 @@ def contacts():
 
 # Cache utility functions
 def get_cached_contacts(client, abook, force_refresh=False):
+    """
+    Fetch contacts from cache or server with proper error handling.
+    """
     with _contacts_cache["lock"]:
         now = time.time()
         if not force_refresh and _contacts_cache["data"] and (now - _contacts_cache["timestamp"]) < CACHE_DURATION:
+            logger.info("Returning contacts from cache.")
             return _contacts_cache["data"]
 
-        # Ensure response is initialized before use
-        # Remove unused response variable
-        # Fetch contacts from server if cache is invalid or force_refresh is True
+        logger.info("Fetching contacts from server...")
         try:
             contacts = fetch_contacts_from_server(client, abook)
             _contacts_cache["data"] = contacts
             _contacts_cache["timestamp"] = now
+            logger.info("Contacts successfully fetched and cached.")
             return contacts
         except Exception as e:
-            logger.error(f"Error fetching contacts from server: {str(e)}")
+            logger.error(f"Critical error fetching contacts: {str(e)}")
             return []
 
         contacts = fetch_contacts_from_server(client, abook)
