@@ -335,7 +335,11 @@ def contacts():
         # List contacts via PROPFIND
         # List contacts via cache or force refresh
         force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
-        contacts = get_cached_contacts(client, abook, force_refresh=force_refresh)
+        try:
+            contacts = get_cached_contacts(client, abook, force_refresh=force_refresh)
+        except Exception as e:
+            logger.error(f"Failed to fetch contacts: {str(e)}")
+            contacts = []
         
         if response.status_code == 207:
             logger.info(f"Found response from address book: {abook['url']}")
