@@ -512,55 +512,62 @@ def get_cached_contacts(client, abook, force_refresh=False):
 def fetch_contacts_from_server(client, abook):
     contacts = []
     logger.info("Fetching contacts from server...")
-    response = abook['session'].request(
-        'PROPFIND',
-        abook['url'],
-        headers={'Depth': '1'}
-    )
-    if response.status_code == 207:
-        logger.info(f"Found response from address book: {abook['url']}")
-        from xml.etree import ElementTree
-        root = ElementTree.fromstring(response.content)
-        logger.info("Parsed XML response")
-        
-        # Process each response element
-        ns = {'D': 'DAV:'}
-        for elem in root.findall('.//D:response', ns):
-            href = elem.find('.//D:href', ns).text
-            if not href.endswith('.vcf'):
-                continue
-                
-            # Get the vCard data
-            card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
-            logger.info(f"Fetching vCard from: {card_url}")
-            card_response = abook['session'].get(card_url)
+    try:
+        response = abook['session'].request(
+            'PROPFIND',
+            abook['url'],
+            headers={'Depth': '1'}
+        )
+        if response.status_code == 207:
+            logger.info(f"Found response from address book: {abook['url']}")
+            from xml.etree import ElementTree
+            root = ElementTree.fromstring(response.content)
+            logger.info("Parsed XML response")
             
-            if card_response.status_code != 200:
-                logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
-                continue
+            # Process each response element
+            ns = {'D': 'DAV:'}
+            for elem in root.findall('.//D:response', ns):
+                href = elem.find('.//D:href', ns).text
+                if not href.endswith('.vcf'):
+                    continue
+                    
+                # Get the vCard data
+                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
+                logger.info(f"Fetching vCard from: {card_url}")
+                card_response = abook['session'].get(card_url)
                 
-            try:
-                # Parse vCard data
-                vcard_data = vobject.readOne(card_response.text)
-                contact_info = {
-                    'id': href.split('/')[-1],
-                    'name': getattr(vcard_data.fn, 'value', 'No Name'),
-                    'first_name': '',
-                    'last_name': '',
-                    'email': '',
-                    'phone': '',
-                    'org': '',
-                    'url': '',
-                    'birthday': '',
-                    'note': '',
-                    'photo': None,
-                    'address': None
-                }
-                # Additional parsing logic here...
-                contacts.append(contact_info)
-            except Exception as e:
-                logger.warning(f"Could not parse vCard {href}: {e}")
-                continue
+                if card_response.status_code != 200:
+                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+                    continue
+                    
+                try:
+                    # Parse vCard data
+                    vcard_data = vobject.readOne(card_response.text)
+                    contact_info = {
+                        'id': href.split('/')[-1],
+                        'name': getattr(vcard_data.fn, 'value', 'No Name'),
+                        'first_name': '',
+                        'last_name': '',
+                        'email': '',
+                        'phone': '',
+                        'org': '',
+                        'url': '',
+                        'birthday': '',
+                        'note': '',
+                        'photo': None,
+                        'address': None
+                    }
+                    # Additional parsing logic here...
+                    contacts.append(contact_info)
+                except Exception as e:
+                    logger.warning(f"Could not parse vCard {href}: {e}")
+        else:
+            logger.error(f"Failed to list contacts: {response.status_code}")
+            response = None
+    except Exception as e:
+        logger.error(f"Error fetching contacts from server: {e}")
+        response = None
+        pass
     else:
         logger.error(f"Failed to list contacts: {response.status_code}")
     return contacts
