@@ -26,17 +26,6 @@ logging.getLogger('caldav').setLevel(logging.INFO)
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # for session management
 
-# Cache configuration
-import time
-from threading import Lock
-
-_contacts_cache = {
-    "data": None,
-    "timestamp": 0,
-    "lock": Lock()
-}
-CACHE_DURATION = 60  # Cache duration in seconds
-
 # Configuration from environment variables
 CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
@@ -222,16 +211,12 @@ def get_carddav_client():
         })
         
         # Verify address book access
-        try:
-            response = session.request('PROPFIND', CARDDAV_URL)
-            if response.status_code != 207:
-                raise Exception(
-                    f"Failed to access address book: status {response.status_code}\n"
-                    f"Response: {response.text[:200]}"  # First 200 chars for debug
-                )
-        except Exception as e:
-            logger.error(f"Error accessing address book: {e}")
-            response = None
+        response = session.request('PROPFIND', CARDDAV_URL)
+        if response.status_code != 207:
+            raise Exception(
+                f"Failed to access address book: status {response.status_code}\n"
+                f"Response: {response.text[:200]}"  # First 200 chars for debug
+            )
             
         logger.info(f"Successfully connected to CardDAV server at {CARDDAV_URL}")
         
@@ -274,12 +259,7 @@ def contacts():
                     vcard_data["URL"] = contact_url
 
                 if bday := request.form.get('birthday', '').strip():
-                    # Convert DD/MM/YYYY to YYYY-MM-DD
-                    if '/' in bday:
-                        day, month, year = bday.split('/')
-                        vcard_data["BDAY"] = f"{year}-{month}-{day}"
-                    else:
-                        vcard_data["BDAY"] = bday
+                    vcard_data["BDAY"] = bday
 
                 # Process address if any field is provided
                 address_fields = {
@@ -322,14 +302,6 @@ def contacts():
                     raise Exception(f"Failed to create contact: status {response.status_code}, body: {response.text}")
                 
                 flash('Contact created successfully')
-                # Invalidate cache after creating a contact
-                with _contacts_cache["lock"]:
-                    _contacts_cache["data"] = None
-                    _contacts_cache["timestamp"] = 0
-                # Invalidate cache after updating a contact
-                with _contacts_cache["lock"]:
-                    _contacts_cache["data"] = None
-                    _contacts_cache["timestamp"] = 0
                 return redirect(url_for('contacts'))
             except Exception as e:
                 logger.error(f"Error creating contact: {str(e)}")
@@ -337,13 +309,15 @@ def contacts():
                 return redirect(url_for('contacts'))
         
         # List contacts via PROPFIND
-        # List contacts via cache or force refresh
-        force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
-        try:
-            contacts = get_cached_contacts(client, abook, force_refresh=force_refresh)
-        except Exception as e:
-            logger.error(f"Failed to fetch contacts: {str(e)}")
-            contacts = []
+        # List contacts via PROPFIND
+        contacts = []
+        logger.info("Listing contacts...")
+        
+        response = abook['session'].request(
+            'PROPFIND',
+            abook['url'],
+            headers={'Depth': '1'}
+        )
         
         if response.status_code == 207:
             logger.info(f"Found response from address book: {abook['url']}")
@@ -419,18 +393,12 @@ def contacts():
                             contact_info['url'] = vcard_data.url.value.strip('<>')
                     except Exception:
                         logger.debug(f"Could not parse URL for contact {href}")
+
                     try:
                         if 'bday' in vcard_data.contents:
-                            # Convert YYYY-MM-DD to DD/MM/YYYY
-                            date_str = vcard_data.bday.value
-                            if '-' in date_str:
-                                year, month, day = date_str.split('-')
-                                contact_info['birthday'] = f"{day}/{month}/{year}"
-                            else:
-                                contact_info['birthday'] = date_str
+                            contact_info['birthday'] = vcard_data.bday.value
                     except Exception:
                         logger.debug(f"Could not parse birthday for contact {href}")
-
 
                     try:
                         if 'note' in vcard_data.contents:
@@ -469,108 +437,13 @@ def contacts():
                     continue
         else:
             logger.error(f"Failed to list contacts: {response.status_code}")
-        contacts.sort(key=lambda c: (
-            (c['last_name'] or '').strip().lower(),
-            (c['first_name'] or '').strip().lower()
-        ))
+        contacts.sort(key=lambda c: (c['last_name'] or c['name'] or "").lower())
         return render_template('index.html', contacts=contacts)
         
     except Exception as e:
         logger.error(f"Error accessing contacts: {str(e)}")
         flash(f"Error: {str(e)}")
         return render_template('index.html', contacts=[])
-
-# Cache utility functions
-def get_cached_contacts(client, abook, force_refresh=False):
-    """
-    Fetch contacts from cache or server with proper error handling.
-    """
-    with _contacts_cache["lock"]:
-        now = time.time()
-        if not force_refresh and _contacts_cache["data"] and (now - _contacts_cache["timestamp"]) < CACHE_DURATION:
-            logger.info("Returning contacts from cache.")
-            return _contacts_cache["data"]
-
-        logger.info("Fetching contacts from server...")
-        try:
-            contacts = fetch_contacts_from_server(client, abook)
-            if not contacts:
-                raise Exception("No contacts fetched from server.")
-            _contacts_cache["data"] = contacts
-            _contacts_cache["timestamp"] = now
-            logger.info("Contacts successfully fetched and cached.")
-            return contacts
-        except Exception as e:
-            logger.critical(f"Critical error fetching contacts: {str(e)}")
-            raise
-
-        contacts = fetch_contacts_from_server(client, abook)
-        _contacts_cache["data"] = contacts
-        _contacts_cache["timestamp"] = now
-        return contacts
-
-def fetch_contacts_from_server(client, abook):
-    contacts = []
-    logger.info("Fetching contacts from server...")
-    try:
-        response = abook['session'].request(
-            'PROPFIND',
-            abook['url'],
-            headers={'Depth': '1'}
-        )
-        if response.status_code == 207:
-            logger.info(f"Found response from address book: {abook['url']}")
-            from xml.etree import ElementTree
-            root = ElementTree.fromstring(response.content)
-            logger.info("Parsed XML response")
-            
-            # Process each response element
-            ns = {'D': 'DAV:'}
-            for elem in root.findall('.//D:response', ns):
-                href = elem.find('.//D:href', ns).text
-                if not href.endswith('.vcf'):
-                    continue
-                    
-                # Get the vCard data
-                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
-                logger.info(f"Fetching vCard from: {card_url}")
-                card_response = abook['session'].get(card_url)
-                
-                if card_response.status_code != 200:
-                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
-                    continue
-                    
-                try:
-                    # Parse vCard data
-                    vcard_data = vobject.readOne(card_response.text)
-                    contact_info = {
-                        'id': href.split('/')[-1],
-                        'name': getattr(vcard_data.fn, 'value', 'No Name'),
-                        'first_name': '',
-                        'last_name': '',
-                        'email': '',
-                        'phone': '',
-                        'org': '',
-                        'url': '',
-                        'birthday': '',
-                        'note': '',
-                        'photo': None,
-                        'address': None
-                    }
-                    # Additional parsing logic here...
-                    contacts.append(contact_info)
-                except Exception as e:
-                    logger.warning(f"Could not parse vCard {href}: {e}")
-        else:
-            logger.error(f"Failed to list contacts: {response.status_code}")
-            response = None
-    except Exception as e:
-        logger.error(f"Error fetching contacts from server: {e}")
-        response = None
-        pass
-    else:
-        logger.error(f"Failed to list contacts: {response.status_code}")
-    return contacts
 
 @app.route('/contacts/update', methods=['POST'])
 @check_login_required
@@ -682,10 +555,6 @@ def update_contact():
         logger.error(f"Error updating contact: {str(e)}")
         flash(f"Error updating contact: {str(e)}")
     
-    # Invalidate cache after deleting a contact
-    with _contacts_cache["lock"]:
-        _contacts_cache["data"] = None
-        _contacts_cache["timestamp"] = 0
     return redirect(url_for('contacts'))
 
 @app.route('/contacts/<contact_id>/delete', methods=['POST'])
