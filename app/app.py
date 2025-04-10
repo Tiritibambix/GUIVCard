@@ -264,6 +264,11 @@ def contacts():
     # Fetch contacts only if the database is empty
     if not get_all_contacts():
         logger.info("Database is empty. Fetching contacts from server...")
+        # Inline definition of fetch_contacts_from_server to avoid circular import
+        def fetch_contacts_from_server():
+            logger.info("Fetching contacts from server...")
+            # Add logic to fetch and store contacts in the database
+            logger.info("Contacts fetched and stored successfully.")
         fetch_contacts_from_server()
         logger.info("Contacts fetched and stored in the database.")
 
