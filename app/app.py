@@ -9,6 +9,10 @@ from urllib.parse import urlparse
 import base64
 import uuid
 from typing import Dict
+from app.database import init_db, add_contact, get_all_contacts, update_contact, delete_contact
+
+# Initialize the database
+init_db()
 
 # Configure logging to write to stdout
 logging.basicConfig(
