@@ -10,6 +10,7 @@ import base64
 import uuid
 from typing import Dict
 from database import init_db, add_contact, get_all_contacts, update_contact, delete_contact
+from app import fetch_contacts_from_server
 import os
 import schedule
 import time
