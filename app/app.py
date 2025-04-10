@@ -480,7 +480,17 @@ def get_cached_contacts(client, abook, force_refresh=False):
             return _contacts_cache["data"]
 
         # Ensure response is initialized before use
-        response = {"status_code": None, "content": None}
+        response = None
+    
+        # Fetch contacts from server if cache is invalid or force_refresh is True
+        try:
+            contacts = fetch_contacts_from_server(client, abook)
+            _contacts_cache["data"] = contacts
+            _contacts_cache["timestamp"] = now
+            return contacts
+        except Exception as e:
+            logger.error(f"Error fetching contacts from server: {str(e)}")
+            return []
 
         contacts = fetch_contacts_from_server(client, abook)
         _contacts_cache["data"] = contacts
