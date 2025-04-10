@@ -222,12 +222,16 @@ def get_carddav_client():
         })
         
         # Verify address book access
-        response = session.request('PROPFIND', CARDDAV_URL)
-        if response.status_code != 207:
-            raise Exception(
-                f"Failed to access address book: status {response.status_code}\n"
-                f"Response: {response.text[:200]}"  # First 200 chars for debug
-            )
+        try:
+            response = session.request('PROPFIND', CARDDAV_URL)
+            if response.status_code != 207:
+                raise Exception(
+                    f"Failed to access address book: status {response.status_code}\n"
+                    f"Response: {response.text[:200]}"  # First 200 chars for debug
+                )
+        except Exception as e:
+            logger.error(f"Error accessing address book: {e}")
+            response = None
             
         logger.info(f"Successfully connected to CardDAV server at {CARDDAV_URL}")
         
