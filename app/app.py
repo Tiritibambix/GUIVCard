@@ -449,8 +449,8 @@ def contacts():
         else:
             logger.error(f"Failed to list contacts: {response.status_code}")
         contacts.sort(key=lambda c: (
-            (c['last_name'] or '').strip().lower(),
-            (c['first_name'] or '').strip().lower()
+            (c['last_name'] if isinstance(c['last_name'], str) else '').strip().lower(),
+            (c['first_name'] if isinstance(c['first_name'], str) else '').strip().lower()
         ))
         return render_template('index.html', contacts=contacts)
         
