@@ -1,6 +1,8 @@
 import sqlite3
 
-DATABASE_FILE = "contacts.db"
+import os
+
+DATABASE_FILE = os.path.join(os.getcwd(), "contacts.db")
 
 def init_db():
     """Initialize the SQLite database and create the contacts table if it doesn't exist."""
