@@ -91,17 +91,13 @@
                                     </a>
                                 </p>
                                 {% endif %}
-                                {% if contact.address and (contact.address.street or contact.address.city or contact.address.postal or contact.address.country) %}
+                                {% if contact.address and (contact.address.street or contact.address.postal or contact.address.city or contact.address.country) %}
                                 <p class="text-sm text-gray-500">
-                                    {% if contact.address.street %}{{ contact.address.street }}{% endif %}
-                                    {% if contact.address.city %}{% if contact.address.street %}, {% endif %}{{ contact.address.city }}{% endif %}
-                                    {% if contact.address.postal or contact.address.country %}<br>{% endif %}
-                                    {% if contact.address.postal %}{{ contact.address.postal }}{% endif %}
-                                    {% if contact.address.country %}{% if contact.address.postal %}, {% endif %}{{ contact.address.country }}{% endif %}
+                                    {{ contact.address.street }}{% if contact.address.postal %}, {{ contact.address.postal }}{% endif %}{% if contact.address.city %}, {{ contact.address.city }}{% endif %}{% if contact.address.country %}, {{ contact.address.country }}{% endif %}
                                 </p>
                                 {% endif %}
                                 {% if contact.birthday %}
-                                <p class="text-sm text-gray-500">Birthday: {{ contact.birthday }}</p>
+                                <p class="text-sm text-gray-500">Birthday: {{ contact.birthday.replace('-', '/') if contact.birthday and '-' in contact.birthday else contact.birthday }}</p>
                                 {% endif %}
                                 {% if contact.note %}
                                 <p class="text-sm text-gray-400 mt-1 italic">{{ contact.note }}</p>
@@ -131,15 +127,15 @@
                   class="space-y-4" enctype="multipart/form-data">
                 <input type="hidden" id="contact-id" name="contact_id">
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-4">
-                        <label for="first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                    <div>
+                        <label for="first_name" class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                         <input type="text" id="first_name" name="first_name" required placeholder="John"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                     <div>
-                        <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                        <label for="last_name" class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                         <input type="text" id="last_name" name="last_name" required placeholder="Doe"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                 </div>
                 
@@ -172,7 +168,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label for="birthday" class="block text-sm font-medium text-gray-700">Birthday</label>
-                        <input type="date" id="birthday" name="birthday"
+                        <input type="text" id="birthday" name="birthday" placeholder="dd/mm/yyyy"
                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                     <div>

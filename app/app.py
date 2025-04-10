@@ -259,7 +259,12 @@ def contacts():
                     vcard_data["URL"] = contact_url
 
                 if bday := request.form.get('birthday', '').strip():
-                    vcard_data["BDAY"] = bday
+                    # Convert DD/MM/YYYY to YYYY-MM-DD
+                    if '/' in bday:
+                        day, month, year = bday.split('/')
+                        vcard_data["BDAY"] = f"{year}-{month}-{day}"
+                    else:
+                        vcard_data["BDAY"] = bday
 
                 # Process address if any field is provided
                 address_fields = {
@@ -393,12 +398,18 @@ def contacts():
                             contact_info['url'] = vcard_data.url.value.strip('<>')
                     except Exception:
                         logger.debug(f"Could not parse URL for contact {href}")
-
                     try:
                         if 'bday' in vcard_data.contents:
-                            contact_info['birthday'] = vcard_data.bday.value
+                            # Convert YYYY-MM-DD to DD/MM/YYYY
+                            date_str = vcard_data.bday.value
+                            if '-' in date_str:
+                                year, month, day = date_str.split('-')
+                                contact_info['birthday'] = f"{day}/{month}/{year}"
+                            else:
+                                contact_info['birthday'] = date_str
                     except Exception:
                         logger.debug(f"Could not parse birthday for contact {href}")
+
 
                     try:
                         if 'note' in vcard_data.contents:
@@ -437,7 +448,10 @@ def contacts():
                     continue
         else:
             logger.error(f"Failed to list contacts: {response.status_code}")
-        contacts.sort(key=lambda c: (c['last_name'] or c['name'] or "").lower())
+        contacts.sort(key=lambda c: (
+            (c['last_name'] or '').strip().lower(),
+            (c['first_name'] or '').strip().lower()
+        ))
         return render_template('index.html', contacts=contacts)
         
     except Exception as e:
