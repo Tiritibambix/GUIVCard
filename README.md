@@ -1,4 +1,4 @@
-# GuiVCard
+# GUIVCard
 
 A CardDAV client with web interface.
 
