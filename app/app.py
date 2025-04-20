@@ -82,6 +82,13 @@ except Exception as e:
     logger.error(f"Failed to connect to CardDAV server: {str(e)}")
     logger.error(f"Please verify your CardDAV URL: {CARDDAV_URL}")
 
+def getElementText(element):
+    if element is None:
+        return ''
+    if isinstance(element, list):
+        return element[0]
+    return element
+
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -468,8 +475,8 @@ def contacts():
 
         try:
             contacts.sort(key=lambda c: (
-                # c['last_name'].strip().lower(),
-                c['first_name'].strip().lower()
+                getElementText(c['last_name']).strip().lower(),
+                getElementText(c['first_name']).strip().lower()
             ))
         except Exception as e:
             logger.error(f"Error sorting contacts: {str(e)}")
