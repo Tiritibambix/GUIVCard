@@ -475,8 +475,8 @@ def contacts():
 
         try:
             contacts.sort(key=lambda c: (
-                getElementText(c['last_name']).strip().lower(),
-                getElementText(c['first_name']).strip().lower()
+                getElementText(c['first_name']).strip().lower(),
+                getElementText(c['last_name']).strip().lower()
             ))
         except Exception as e:
             logger.error(f"Error sorting contacts: {str(e)}")
