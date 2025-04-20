@@ -240,6 +240,7 @@ def contacts():
         
         if request.method == 'POST':
             try:
+                logger.info("Creating new contact...")
                 # Collect all available contact data
                 # Process form data
                 vcard_data = {
@@ -345,12 +346,17 @@ def contacts():
             logger.info("Parsed XML response")
             
             # Process each response element
-            ns = {'D': 'DAV:'}
+            ns = {
+                'D': 'DAV:',
+                'C': 'urn:ietf:params:xml:ns:carddav'
+            }
             for elem in root.findall('.//D:response', ns):
                 href = elem.find('.//D:href', ns).text
                 if not href.endswith('.vcf'):
                     continue
 
+                logger.debug(f"Processing contact: {href}")
+                
                 # Extract vCard data directly from the response
                 address_data = elem.find('.//C:address-data', ns)
                 if address_data is None or not address_data.text:
