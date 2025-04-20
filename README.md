@@ -1,5 +1,6 @@
 <p align="center">
   <img src="static/media/guivcard-banner.png" alt="GuiVCard Banner" width="400">
+</p>
 
 # GuiVCard
 
@@ -28,6 +29,8 @@ GuiVCard is a web application designed to manage contacts via a CardDAV server. 
 
 ## Installation
 
+### Local Installation (Python)
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/your-repo/GUIVCard.git
@@ -45,6 +48,19 @@ GuiVCard is a web application designed to manage contacts via a CardDAV server. 
    - `ADMIN_PASSWORD`: Admin password
 
 4. Run the application:
+   ```bash
+   python app/app.py
+   ```
+
+### Docker Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/GUIVCard.git
+   cd GUIVCard
+   ```
+
+2. Run the application using Docker Compose:
    ```bash
    docker-compose up -d
    ```
