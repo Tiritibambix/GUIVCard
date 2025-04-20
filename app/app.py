@@ -325,17 +325,38 @@ def contacts():
     <D:prop>
         <D:getetag/>
         <D:getcontenttype/>
-        <C:address-data/>
+        <C:address-data>
+            <C:prop name="VERSION"/>
+            <C:prop name="UID"/>
+            <C:prop name="FN"/>
+            <C:prop name="N"/>
+            <C:prop name="EMAIL"/>
+            <C:prop name="TEL"/>
+            <C:prop name="ADR"/>
+            <C:prop name="ORG"/>
+            <C:prop name="URL"/>
+            <C:prop name="BDAY"/>
+            <C:prop name="NOTE"/>
+            <C:prop name="PHOTO"/>
+        </C:address-data>
     </D:prop>
 </D:propfind>'''
 
+        headers = {
+            'Depth': '1',
+            'Content-Type': 'application/xml; charset=utf-8',
+            'Accept': 'application/xml, text/xml',
+            'Prefer': 'return=representation'
+        }
+        
+        logger.debug(f"Sending PROPFIND request to {abook['url']}")
+        logger.debug(f"Headers: {headers}")
+        logger.debug(f"Body: {propfind_body}")
+        
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
-            headers={
-                'Depth': '1',
-                'Content-Type': 'application/xml; charset=utf-8'
-            },
+            headers=headers,
             data=propfind_body
         )
         
