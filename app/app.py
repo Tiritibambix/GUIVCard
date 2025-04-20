@@ -355,7 +355,7 @@ def contacts():
                 if not href.endswith('.vcf'):
                     continue
 
-                logger.debug(f"Processing contact: {href}")
+                logger.info(f"Processing contact: {href}")
                 
                 # Extract vCard data directly from the response
                 address_data = elem.find('.//C:address-data', ns)
