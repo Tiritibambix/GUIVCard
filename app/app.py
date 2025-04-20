@@ -8,7 +8,26 @@ import requests
 from urllib.parse import urlparse
 import base64
 import uuid
+import time
 from typing import Dict
+from threading import Lock
+
+# Cache configuration
+CACHE_TTL = 300  # 5 minutes
+cache_lock = Lock()
+
+# Simple cache for vCards with TTL and thread safety
+vcard_cache = {}
+
+def clean_cache():
+    """Remove expired entries from cache"""
+    current_time = time.time()
+    with cache_lock:
+        expired = [k for k, v in vcard_cache.items()
+                  if current_time - v['timestamp'] > CACHE_TTL]
+        for k in expired:
+            del vcard_cache[k]
+            logger.debug(f"Removed expired cache entry for {k}")
 
 # Configure logging to write to stdout
 logging.basicConfig(
@@ -318,30 +337,25 @@ def contacts():
         contacts = []
         logger.info("Listing contacts...")
         
-        # Request PROPFIND with address-data
-        body = """<?xml version="1.0" encoding="utf-8" ?>
-            <D:propfind xmlns:D="DAV:" xmlns:CARD="urn:ietf:params:xml:ns:carddav">
-                <D:prop>
-                    <D:getetag/>
-                    <CARD:address-data content-type="text/vcard" version="3.0"/>
-                </D:prop>
-            </D:propfind>"""
-            
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
             headers={
                 'Depth': '1',
                 'Content-Type': 'application/xml; charset=utf-8'
-            },
-            data=body
+            }
         )
         
         if response.status_code == 207:
             logger.info(f"Found response from address book: {abook['url']}")
+            logger.info(f"Raw response content: {response.content.decode()}")
             from xml.etree import ElementTree
             root = ElementTree.fromstring(response.content)
             logger.info("Parsed XML response")
+            
+            # Debug namespaces in the response
+            for prefix, uri in root.nsmap.items() if hasattr(root, 'nsmap') else []:
+                logger.info(f"Found namespace: {prefix} -> {uri}")
             
             # Process each response element
             ns = {
@@ -358,10 +372,54 @@ def contacts():
                 etag = etag.text if etag is not None else None
 
                 # Get vCard data directly from PROPFIND response
-                vcard_data = elem.find('.//CARD:address-data', ns)
-                if vcard_data is None or not vcard_data.text:
-                    logger.warning(f"No vCard data found for {href}")
-                    continue
+                # Clean cache before processing
+                clean_cache()
+                
+                # Get the vCard data with caching
+                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
+                contact_id = href.split('/')[-1]
+                
+                with cache_lock:
+                    # Check if we have a cached version
+                    cached = vcard_cache.get(contact_id)
+                    card_response = None
+                    
+                    if cached:
+                        # Verify if cached version is still valid using HEAD request
+                        head = abook['session'].head(card_url)
+                        if head.status_code == 200:
+                            current_etag = head.headers.get('ETag', '').strip('"')
+                            if current_etag == cached.get('etag'):
+                                logger.info(f"Using cached vCard for {contact_id}")
+                                card_response = type('Response', (), {
+                                    'status_code': 200,
+                                    'text': cached['data'],
+                                    'headers': {'ETag': current_etag}
+                                })
+                    
+                    if card_response is None:
+                        # Fetch fresh data
+                        logger.info(f"Fetching vCard from: {card_url}")
+                        card_response = abook['session'].get(card_url)
+                        if card_response.status_code == 200:
+                            etag = card_response.headers.get('ETag', '').strip('"')
+                            # Cache the response
+                            vcard_cache[contact_id] = {
+                                'data': card_response.text,
+                                'etag': etag,
+                                'timestamp': time.time()
+                            }
+                            logger.info(f"Cached vCard for {contact_id}")
+                        else:
+                            logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+                            continue
+                    
+                    # Store ETag in session for updates
+                    if card_response.status_code == 200:
+                        etag = card_response.headers.get('ETag', '').strip('"')
+                        if etag:
+                            session[f'etag_{contact_id}'] = etag
+                            logger.info(f"Stored ETag for {contact_id}: {etag}")
 
                 try:
                     # Store the ETag in session for later use, using just the filename as key
