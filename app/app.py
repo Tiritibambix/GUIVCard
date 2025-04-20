@@ -318,10 +318,23 @@ def contacts():
         contacts = []
         logger.info("Listing contacts...")
         
+        # Request PROPFIND with address-data
+        body = """<?xml version="1.0" encoding="utf-8" ?>
+            <D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+                <D:prop>
+                    <D:getetag/>
+                    <C:address-data/>
+                </D:prop>
+            </D:propfind>"""
+            
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
-            headers={'Depth': '1'}
+            headers={
+                'Depth': '1',
+                'Content-Type': 'application/xml; charset=utf-8'
+            },
+            data=body
         )
         
         if response.status_code == 207:
@@ -331,29 +344,40 @@ def contacts():
             logger.info("Parsed XML response")
             
             # Process each response element
-            ns = {'D': 'DAV:'}
+            ns = {
+                'D': 'DAV:',
+                'C': 'urn:ietf:params:xml:ns:carddav'
+            }
             for elem in root.findall('.//D:response', ns):
                 href = elem.find('.//D:href', ns).text
                 if not href.endswith('.vcf'):
                     continue
-                    
-                # Get the vCard data
-                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
-                logger.info(f"Fetching vCard from: {card_url}")
-                card_response = abook['session'].get(card_url)
-                
-                if card_response.status_code != 200:
-                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+
+                # Get ETag for future operations
+                etag = elem.find('.//D:getetag', ns)
+                etag = etag.text if etag is not None else None
+
+                # Get vCard data directly from PROPFIND response
+                vcard_data = elem.find('.//C:address-data', ns)
+                if vcard_data is None or not vcard_data.text:
+                    logger.warning(f"No vCard data found for {href}")
                     continue
-                    
+
                 try:
-                    # First try to parse without validation
-                    vcard_data = vobject.readOne(card_response.text)
+                    # Store the ETag in session for later use, using just the filename as key
+                    contact_id = href.split('/')[-1]
+                    if etag:
+                        session[f'etag_{contact_id}'] = etag.strip('"')  # Remove quotes from ETag
+                        
+                    # Parse the vCard data directly from PROPFIND response
+                    vobj = vobject.readOne(vcard_data.text)
+                    logger.info(f"Parsed vCard: {vcard_data}")
                     
                     # If successful, extract data safely
                     contact_info = {
-                        'id': href.split('/')[-1],
-                        'name': getattr(vcard_data.fn, 'value', 'No Name'),
+                        'id': contact_id,
+                        'uid': getattr(vobj, 'uid', '').value if hasattr(vobj, 'uid') else '',
+                        'name': getattr(vobj.fn, 'value', 'No Name'),
                         'first_name': '',
                         'last_name': '',
                         'email': '',
@@ -468,37 +492,23 @@ def update_contact():
         contact_id = request.form['contact_id']
         url = f"{abook['url'].rstrip('/')}/{contact_id}"
         
-        # Verify contact exists
-        logger.info(f"Checking if contact exists at {url}")
-        response = abook['session'].request('PROPFIND', url, headers={'Depth': '0'})
-        if response.status_code == 404:
-            raise Exception("Contact not found")
-        elif response.status_code != 207:
-            raise Exception(f"Failed to verify contact: status {response.status_code}")
-        
-        # Fetch existing vCard to get its UID and photo
-        existing = abook['session'].get(url)
-        if existing.status_code != 200:
-            raise Exception(f"Could not fetch existing vCard for UID check: {existing.status_code}")
-        
-        # Initialize vcard_data
-        vcard_data = {}
-        
-        try:
-            # Get existing vCard data first
-            vobj = vobject.readOne(existing.text)
-            vcard_data["UID"] = vobj.uid.value  # Preserve the existing UID
-            logger.info(f"Reusing existing UID: {vobj.uid.value}")
+        # Get stored ETag for this contact
+        etag = session.get(f'etag_{contact_id}')
+        if not etag:
+            logger.warning("No ETag found for contact, proceeding without optimistic locking")
             
-            # Handle photo: keep existing unless new one uploaded
-            photo_file = request.files.get('photo')
-            if photo_file and photo_file.filename:
-                vcard_data["PHOTO"] = photo_file.read()
-            elif 'photo' in vobj.contents:
-                vcard_data["PHOTO"] = vobj.photo.value
-                logger.debug("Preserved existing photo")
-        except Exception as parse_err:
-            raise Exception(f"Failed to parse existing vCard: {parse_err}")
+        # Initialize vcard_data with UID from form
+        vcard_data = {
+            "UID": request.form.get('uid')  # UID should be passed from the form
+        }
+        
+        if not vcard_data["UID"]:
+            raise Exception("No UID provided for contact update")
+        
+        # Handle photo: keep existing unless new one uploaded
+        photo_file = request.files.get('photo')
+        if photo_file and photo_file.filename:
+            vcard_data["PHOTO"] = photo_file.read()
         
         # Process form data
         first_name = request.form.get('first_name', '').strip()
@@ -555,10 +565,16 @@ def update_contact():
         logger.info(f"Updating vCard at {url}:\n{vcard_content}")
         
         # Update the contact
+        # Prepare headers with ETag if available
+        headers = {
+            "Content-Type": "text/vcard",
+            "If-Match": f'"{etag}"' if etag else "*"
+        }
+        
         response = abook['session'].put(
             url,
             data=vcard_content,
-            headers={"Content-Type": "text/vcard"}
+            headers=headers
         )
         if response.status_code not in (200, 201, 204):
             raise Exception(f"Failed to update contact: status {response.status_code}, body: {response.text}")
