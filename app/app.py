@@ -465,10 +465,14 @@ def contacts():
                     continue
         else:
             logger.error(f"Failed to list contacts: {response.status_code}")
-        # contacts.sort(key=lambda c: (
-        #     (c['last_name'] or '').strip().lower(),
-        #     (c['first_name'] or '').strip().lower()
-        # ))
+
+        try:
+            contacts.sort(key=lambda c: (
+                c['last_name'].strip().lower(),
+                c['first_name'].strip().lower()
+            ))
+        except Exception as e:
+            logger.error(f"Error sorting contacts: {str(e)}")
         return render_template('index.html', contacts=contacts)
         
     except Exception as e:
