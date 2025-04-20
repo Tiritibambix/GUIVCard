@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 from functools import wraps
 import os
 import vobject
-from io import StringIO
 import logging
 import sys
 import requests
@@ -319,45 +318,10 @@ def contacts():
         contacts = []
         logger.info("Listing contacts...")
         
-        # Préparer le corps XML pour PROPFIND avec address-data
-        propfind_body = '''<?xml version="1.0" encoding="utf-8" ?>
-<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
-    <D:prop>
-        <D:getetag/>
-        <D:getcontenttype/>
-        <C:address-data>
-            <C:prop name="VERSION"/>
-            <C:prop name="UID"/>
-            <C:prop name="FN"/>
-            <C:prop name="N"/>
-            <C:prop name="EMAIL"/>
-            <C:prop name="TEL"/>
-            <C:prop name="ADR"/>
-            <C:prop name="ORG"/>
-            <C:prop name="URL"/>
-            <C:prop name="BDAY"/>
-            <C:prop name="NOTE"/>
-            <C:prop name="PHOTO"/>
-        </C:address-data>
-    </D:prop>
-</D:propfind>'''
-
-        headers = {
-            'Depth': '1',
-            'Content-Type': 'application/xml; charset=utf-8',
-            'Accept': 'application/xml, text/xml',
-            'Prefer': 'return=representation'
-        }
-        
-        logger.debug(f"Sending PROPFIND request to {abook['url']}")
-        logger.debug(f"Headers: {headers}")
-        logger.debug(f"Body: {propfind_body}")
-        
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
-            headers=headers,
-            data=propfind_body
+            headers={'Depth': '1'}
         )
         
         if response.status_code == 207:
@@ -367,44 +331,24 @@ def contacts():
             logger.info("Parsed XML response")
             
             # Process each response element
-            ns = {
-                'D': 'DAV:',
-                'C': 'urn:ietf:params:xml:ns:carddav'
-            }
-            
-            # Log la réponse complète pour debug
-            logger.debug(f"PROPFIND Response XML:\n{response.content.decode('utf-8')}")
-            
+            ns = {'D': 'DAV:'}
             for elem in root.findall('.//D:response', ns):
                 href = elem.find('.//D:href', ns).text
-                logger.debug(f"Processing vCard response for: {href}")
-                # Extraire l'URL et les données vCard de la réponse PROPFIND
                 if not href.endswith('.vcf'):
                     continue
-
+                    
+                # Get the vCard data
+                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
+                logger.info(f"Fetching vCard from: {card_url}")
+                card_response = abook['session'].get(card_url)
+                
+                if card_response.status_code != 200:
+                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+                    continue
+                    
                 try:
-                    # Trouver les données vCard dans la réponse XML avec le bon namespace
-                    address_data = elem.find('.//C:address-data', ns)
-                    if address_data is None or not address_data.text:
-                        logger.warning(f"No valid address data found for {href}")
-                        continue
-
-                    # Log les données vCard pour debug
-                    vcard_content = address_data.text
-                    logger.debug(f"Trying to parse vCard content:\n{vcard_content}")
-                    
-                    # Vérifier que le contenu commence bien par BEGIN:VCARD
-                    if not vcard_content.strip().startswith('BEGIN:VCARD'):
-                        logger.warning(f"Invalid vCard format for {href} - missing BEGIN:VCARD")
-                        continue
-                        
-                    # Parser les données vCard en utilisant StringIO
-                    vcard_text = StringIO(vcard_content)
-                    vcard_data = vobject.readOne(vcard_text)
-                    
-                    if not hasattr(vcard_data, 'fn'):
-                        logger.warning(f"vCard {href} missing required FN field")
-                        continue
+                    # First try to parse without validation
+                    vcard_data = vobject.readOne(card_response.text)
                     
                     # If successful, extract data safely
                     contact_info = {
