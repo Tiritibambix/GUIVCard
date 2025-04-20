@@ -318,10 +318,23 @@ def contacts():
         contacts = []
         logger.info("Listing contacts...")
         
+        # Prepare PROPFIND body to request address-data
+        propfind_body = '''<?xml version="1.0" encoding="utf-8" ?>
+        <D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+            <D:prop>
+                <D:getetag/>
+                <C:address-data/>
+            </D:prop>
+        </D:propfind>'''
+
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
-            headers={'Depth': '1'}
+            headers={
+                'Depth': '1',
+                'Content-Type': 'application/xml'
+            },
+            data=propfind_body
         )
         
         if response.status_code == 207:
@@ -336,21 +349,18 @@ def contacts():
                 href = elem.find('.//D:href', ns).text
                 if not href.endswith('.vcf'):
                     continue
-                    
-                # Get the vCard data
-                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
-                logger.info(f"Fetching vCard from: {card_url}")
-                card_response = abook['session'].get(card_url)
-                
-                if card_response.status_code != 200:
-                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+
+                # Extract vCard data directly from the response
+                address_data = elem.find('.//C:address-data', ns)
+                if address_data is None or not address_data.text:
+                    logger.warning(f"No address-data found for {href}")
                     continue
-                    
+
                 try:
-                    # First try to parse without validation
-                    vcard_data = vobject.readOne(card_response.text)
-                    
-                    # If successful, extract data safely
+                    # Parse vCard data
+                    vcard_data = vobject.readOne(address_data.text)
+
+                    # Extract contact information
                     contact_info = {
                         'id': href.split('/')[-1],
                         'name': getattr(vcard_data.fn, 'value', 'No Name'),
