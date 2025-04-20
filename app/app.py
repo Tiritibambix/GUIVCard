@@ -343,7 +343,7 @@ def contacts():
             logger.info(f"Found response from address book: {abook['url']}")
             from xml.etree import ElementTree
             root = ElementTree.fromstring(response.content)
-            logger.info("Parsed XML response")
+            logger.info(f"Parsed XML response {response.content}")
             
             # Process each response element
             ns = {
