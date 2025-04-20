@@ -468,8 +468,8 @@ def contacts():
 
         try:
             contacts.sort(key=lambda c: (
-                c['last_name'].strip().lower(),
-                c['first_name'].strip().lower()
+                c['last_name'].strip().lower()
+                # c['first_name'].strip().lower()
             ))
         except Exception as e:
             logger.error(f"Error sorting contacts: {str(e)}")
