@@ -346,16 +346,24 @@ def contacts():
             logger.info("Parsed XML response")
             
             # Process each response element
-            ns = {'D': 'DAV:'}
+            ns = {
+                'D': 'DAV:',
+                'C': 'urn:ietf:params:xml:ns:carddav'
+            }
+            
+            # Log la réponse complète pour debug
+            logger.debug(f"PROPFIND Response XML:\n{response.content.decode('utf-8')}")
+            
             for elem in root.findall('.//D:response', ns):
                 href = elem.find('.//D:href', ns).text
+                logger.debug(f"Processing vCard response for: {href}")
                 # Extraire l'URL et les données vCard de la réponse PROPFIND
                 if not href.endswith('.vcf'):
                     continue
 
                 try:
-                    # Trouver les données vCard dans la réponse XML
-                    address_data = elem.find('.//C:address-data', {'C': 'urn:ietf:params:xml:ns:carddav'})
+                    # Trouver les données vCard dans la réponse XML avec le bon namespace
+                    address_data = elem.find('.//C:address-data', ns)
                     if address_data is None or not address_data.text:
                         logger.warning(f"No valid address data found for {href}")
                         continue
