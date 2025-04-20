@@ -360,9 +360,22 @@ def contacts():
                     continue
 
                 try:
+                    # Log les données vCard pour debug
+                    vcard_content = address_data.text
+                    logger.debug(f"Trying to parse vCard content:\n{vcard_content}")
+                    
+                    # Vérifier que le contenu commence bien par BEGIN:VCARD
+                    if not vcard_content.strip().startswith('BEGIN:VCARD'):
+                        logger.warning(f"Invalid vCard format for {href} - missing BEGIN:VCARD")
+                        continue
+                        
                     # Parser les données vCard en utilisant StringIO
-                    vcard_text = StringIO(address_data.text)
+                    vcard_text = StringIO(vcard_content)
                     vcard_data = vobject.readOne(vcard_text)
+                    
+                    if not hasattr(vcard_data, 'fn'):
+                        logger.warning(f"vCard {href} missing required FN field")
+                        continue
                     
                     # If successful, extract data safely
                     contact_info = {
