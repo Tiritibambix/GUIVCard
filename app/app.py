@@ -106,6 +106,7 @@ def check_auth(username, password):
     return result
 
 def check_login_required(f):
+    logger.info("Checking if user is logged in")
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
