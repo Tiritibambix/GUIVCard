@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 from functools import wraps
 import os
 import vobject
+from io import StringIO
 import logging
 import sys
 import requests
@@ -359,8 +360,9 @@ def contacts():
                     continue
 
                 try:
-                    # Parser les données vCard directement depuis la réponse PROPFIND
-                    vcard_data = vobject.readOne(address_data.text)
+                    # Parser les données vCard en utilisant StringIO
+                    vcard_text = StringIO(address_data.text)
+                    vcard_data = vobject.readOne(vcard_text)
                     
                     # If successful, extract data safely
                     contact_info = {
