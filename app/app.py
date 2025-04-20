@@ -320,23 +320,23 @@ def contacts():
         contacts = []
         logger.info("Listing contacts...")
         
-        # Prepare PROPFIND body to request address-data
-        propfind_body = '''<?xml version="1.0" encoding="utf-8" ?>
-        <D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+        # Prepare REPORT body to request address-data
+        report_body = '''<?xml version="1.0" encoding="utf-8" ?>
+        <C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
             <D:prop>
                 <D:getetag/>
                 <C:address-data/>
             </D:prop>
-        </D:propfind>'''
+        </C:addressbook-query>'''
 
         response = abook['session'].request(
-            'PROPFIND',
+            'REPORT',
             abook['url'],
             headers={
                 'Depth': '1',
                 'Content-Type': 'application/xml'
             },
-            data=propfind_body
+            data=report_body
         )
         
         if response.status_code == 207:
