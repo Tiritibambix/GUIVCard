@@ -353,13 +353,13 @@ def contacts():
                 if not href.endswith('.vcf'):
                     continue
 
-                # Trouver les données vCard dans la réponse XML
-                address_data = elem.find('.//C:address-data', {'C': 'urn:ietf:params:xml:ns:carddav'})
-                if address_data is None:
-                    logger.warning(f"No address data found for {href}")
-                    continue
-
                 try:
+                    # Trouver les données vCard dans la réponse XML
+                    address_data = elem.find('.//C:address-data', {'C': 'urn:ietf:params:xml:ns:carddav'})
+                    if address_data is None or not address_data.text:
+                        logger.warning(f"No valid address data found for {href}")
+                        continue
+
                     # Log les données vCard pour debug
                     vcard_content = address_data.text
                     logger.debug(f"Trying to parse vCard content:\n{vcard_content}")
