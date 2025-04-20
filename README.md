@@ -1,71 +1,72 @@
-# GUIVCard
+<p align="center">
+  <img src="static/media/guivcard-banner.png" alt="GuiVCard Banner" width="400">
 
-A CardDAV client with web interface.
+# GuiVCard
 
-## Tech Stack
-- Python + Flask
-- CardDAV Client: caldav
-- Authentication: Basic auth
-- UI: Tailwind CSS
-- Deployment: Docker
-- Deployment: Docker
-
-## Docker Image
-
-Pre-built Docker image is available on Docker Hub:
-`tiritibambix/guivcard`
-
-Image is built automatically for amd64 and arm64 architectures.
+GuiVCard is a web application designed to manage contacts via a CardDAV server. It provides an intuitive user interface and advanced features for seamless contact management.
 
 ## Features
 
-- Simple authentication
-- CardDAV integration (GET/PUT/POST on .vcf)
-- Contact management (list, create, edit, delete)
-- Modern responsive UI
+- **Secure Authentication**: Login with username and password.
+- **Contact Management**:
+  - Add, update, and delete contacts.
+  - Display detailed contact information.
+  - Dynamic search among contacts.
+- **CardDAV Integration**:
+  - Retrieve and manage contacts from a CardDAV server.
+  - Generate and update vCards.
+- **Modern User Interface**:
+  - Design powered by Tailwind CSS.
+  - Responsive layout for all devices.
+  - Scrollable interface for long content.
+
+## Prerequisites
+
+- Python 3.8 or higher
+- A functional CardDAV server
+- Dependencies listed in `requirements.txt`
+
+## Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/GUIVCard.git
+   cd GUIVCard
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Configure environment variables:
+   - `CARDDAV_URL`: URL of your CardDAV server
+   - `ADMIN_USERNAME`: Admin username
+   - `ADMIN_PASSWORD`: Admin password
+
+4. Run the application:
+   ```bash
+   docker-compose up -d
+   ```
+
+## Usage
+
+The application runs on port 8190.
+
+Access the application at:  
+`http://YOUR_SERVER_IP:8190`
 
 ## Deployment
 
 ### Configuration
 
-Edit the docker-compose.yml file and replace the placeholders:
+The application uses Basic Auth with credentials configured in `docker-compose.yml` to authenticate with the CardDAV server.
 
-```yaml
-environment:
-  - CARDDAV_URL=https://your.carddav-server.com/username/contacts/
-  - ADMIN_USERNAME=your_username
-  - ADMIN_PASSWORD=your_password
-```
+### Security Notes
 
-Replace:
-- `your.carddav-server.com/username/contacts/` with the full URL to your CardDAV address book
-  - For Radicale, it's typically `https://radicale.example.com/username/contacts/`
-  - You can find this URL in your Radicale web interface
-- `your_username` with your CardDAV username
-- `your_password` with your CardDAV password
-- `YOUR_SERVER_IP` with your server's IP address or domain name
-
-### Run the Application
-
-```bash
-docker-compose up -d
-```
-
-## Port
-
-The application runs on port 8190.
-
-Access the application at http://YOUR_SERVER_IP:8190
-
-## Authentication
-
-The application uses Basic Auth with the credentials configured in docker-compose.yml to authenticate with the CardDAV server.
-
-## Security Notes
-
-- Never commit passwords or sensitive information to the repository
-- Use HTTPS in production
-- Keep your modified docker-compose.yml secure and never commit it
+- Never commit passwords or sensitive information to the repository.
+- Use HTTPS in production.
+- Keep your modified `docker-compose.yml` secure and never commit it.
 
 ## Development
 
