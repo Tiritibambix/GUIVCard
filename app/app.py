@@ -320,10 +320,10 @@ def contacts():
         
         # Request PROPFIND with address-data
         body = """<?xml version="1.0" encoding="utf-8" ?>
-            <D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+            <D:propfind xmlns:D="DAV:" xmlns:CARD="urn:ietf:params:xml:ns:carddav">
                 <D:prop>
                     <D:getetag/>
-                    <C:address-data/>
+                    <CARD:address-data content-type="text/vcard" version="3.0"/>
                 </D:prop>
             </D:propfind>"""
             
@@ -346,7 +346,7 @@ def contacts():
             # Process each response element
             ns = {
                 'D': 'DAV:',
-                'C': 'urn:ietf:params:xml:ns:carddav'
+                'CARD': 'urn:ietf:params:xml:ns:carddav'
             }
             for elem in root.findall('.//D:response', ns):
                 href = elem.find('.//D:href', ns).text
@@ -358,7 +358,7 @@ def contacts():
                 etag = etag.text if etag is not None else None
 
                 # Get vCard data directly from PROPFIND response
-                vcard_data = elem.find('.//C:address-data', ns)
+                vcard_data = elem.find('.//CARD:address-data', ns)
                 if vcard_data is None or not vcard_data.text:
                     logger.warning(f"No vCard data found for {href}")
                     continue
