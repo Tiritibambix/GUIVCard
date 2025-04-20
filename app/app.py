@@ -8,26 +8,7 @@ import requests
 from urllib.parse import urlparse
 import base64
 import uuid
-import time
 from typing import Dict
-from threading import Lock
-
-# Cache configuration
-CACHE_TTL = 300  # 5 minutes
-cache_lock = Lock()
-
-# Simple cache for vCards with TTL and thread safety
-vcard_cache = {}
-
-def clean_cache():
-    """Remove expired entries from cache"""
-    current_time = time.time()
-    with cache_lock:
-        expired = [k for k, v in vcard_cache.items()
-                  if current_time - v['timestamp'] > CACHE_TTL]
-        for k in expired:
-            del vcard_cache[k]
-            logger.debug(f"Removed expired cache entry for {k}")
 
 # Configure logging to write to stdout
 logging.basicConfig(
@@ -340,102 +321,39 @@ def contacts():
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
-            headers={
-                'Depth': '1',
-                'Content-Type': 'application/xml; charset=utf-8'
-            }
+            headers={'Depth': '1'}
         )
         
         if response.status_code == 207:
             logger.info(f"Found response from address book: {abook['url']}")
-            logger.info(f"Raw response content: {response.content.decode()}")
             from xml.etree import ElementTree
             root = ElementTree.fromstring(response.content)
             logger.info("Parsed XML response")
             
-            # Debug namespaces in the response
-            for prefix, uri in root.nsmap.items() if hasattr(root, 'nsmap') else []:
-                logger.info(f"Found namespace: {prefix} -> {uri}")
-            
             # Process each response element
-            ns = {
-                'D': 'DAV:',
-                'CARD': 'urn:ietf:params:xml:ns:carddav'
-            }
+            ns = {'D': 'DAV:'}
             for elem in root.findall('.//D:response', ns):
                 href = elem.find('.//D:href', ns).text
                 if not href.endswith('.vcf'):
                     continue
-
-                # Get ETag for future operations
-                etag = elem.find('.//D:getetag', ns)
-                etag = etag.text if etag is not None else None
-
-                # Get vCard data directly from PROPFIND response
-                # Clean cache before processing
-                clean_cache()
-                
-                # Get the vCard data with caching
+                    
+                # Get the vCard data
                 card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
-                contact_id = href.split('/')[-1]
+                logger.info(f"Fetching vCard from: {card_url}")
+                card_response = abook['session'].get(card_url)
                 
-                with cache_lock:
-                    # Check if we have a cached version
-                    cached = vcard_cache.get(contact_id)
-                    card_response = None
+                if card_response.status_code != 200:
+                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+                    continue
                     
-                    if cached:
-                        # Verify if cached version is still valid using HEAD request
-                        head = abook['session'].head(card_url)
-                        if head.status_code == 200:
-                            current_etag = head.headers.get('ETag', '').strip('"')
-                            if current_etag == cached.get('etag'):
-                                logger.info(f"Using cached vCard for {contact_id}")
-                                card_response = type('Response', (), {
-                                    'status_code': 200,
-                                    'text': cached['data'],
-                                    'headers': {'ETag': current_etag}
-                                })
-                    
-                    if card_response is None:
-                        # Fetch fresh data
-                        logger.info(f"Fetching vCard from: {card_url}")
-                        card_response = abook['session'].get(card_url)
-                        if card_response.status_code == 200:
-                            etag = card_response.headers.get('ETag', '').strip('"')
-                            # Cache the response
-                            vcard_cache[contact_id] = {
-                                'data': card_response.text,
-                                'etag': etag,
-                                'timestamp': time.time()
-                            }
-                            logger.info(f"Cached vCard for {contact_id}")
-                        else:
-                            logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
-                            continue
-                    
-                    # Store ETag in session for updates
-                    if card_response.status_code == 200:
-                        etag = card_response.headers.get('ETag', '').strip('"')
-                        if etag:
-                            session[f'etag_{contact_id}'] = etag
-                            logger.info(f"Stored ETag for {contact_id}: {etag}")
-
                 try:
-                    # Store the ETag in session for later use, using just the filename as key
-                    contact_id = href.split('/')[-1]
-                    if etag:
-                        session[f'etag_{contact_id}'] = etag.strip('"')  # Remove quotes from ETag
-                        
-                    # Parse the vCard data directly from PROPFIND response
-                    vobj = vobject.readOne(vcard_data.text)
-                    logger.info(f"Parsed vCard: {vcard_data}")
+                    # First try to parse without validation
+                    vcard_data = vobject.readOne(card_response.text)
                     
                     # If successful, extract data safely
                     contact_info = {
-                        'id': contact_id,
-                        'uid': getattr(vobj, 'uid', '').value if hasattr(vobj, 'uid') else '',
-                        'name': getattr(vobj.fn, 'value', 'No Name'),
+                        'id': href.split('/')[-1],
+                        'name': getattr(vcard_data.fn, 'value', 'No Name'),
                         'first_name': '',
                         'last_name': '',
                         'email': '',
@@ -550,23 +468,37 @@ def update_contact():
         contact_id = request.form['contact_id']
         url = f"{abook['url'].rstrip('/')}/{contact_id}"
         
-        # Get stored ETag for this contact
-        etag = session.get(f'etag_{contact_id}')
-        if not etag:
-            logger.warning("No ETag found for contact, proceeding without optimistic locking")
+        # Verify contact exists
+        logger.info(f"Checking if contact exists at {url}")
+        response = abook['session'].request('PROPFIND', url, headers={'Depth': '0'})
+        if response.status_code == 404:
+            raise Exception("Contact not found")
+        elif response.status_code != 207:
+            raise Exception(f"Failed to verify contact: status {response.status_code}")
+        
+        # Fetch existing vCard to get its UID and photo
+        existing = abook['session'].get(url)
+        if existing.status_code != 200:
+            raise Exception(f"Could not fetch existing vCard for UID check: {existing.status_code}")
+        
+        # Initialize vcard_data
+        vcard_data = {}
+        
+        try:
+            # Get existing vCard data first
+            vobj = vobject.readOne(existing.text)
+            vcard_data["UID"] = vobj.uid.value  # Preserve the existing UID
+            logger.info(f"Reusing existing UID: {vobj.uid.value}")
             
-        # Initialize vcard_data with UID from form
-        vcard_data = {
-            "UID": request.form.get('uid')  # UID should be passed from the form
-        }
-        
-        if not vcard_data["UID"]:
-            raise Exception("No UID provided for contact update")
-        
-        # Handle photo: keep existing unless new one uploaded
-        photo_file = request.files.get('photo')
-        if photo_file and photo_file.filename:
-            vcard_data["PHOTO"] = photo_file.read()
+            # Handle photo: keep existing unless new one uploaded
+            photo_file = request.files.get('photo')
+            if photo_file and photo_file.filename:
+                vcard_data["PHOTO"] = photo_file.read()
+            elif 'photo' in vobj.contents:
+                vcard_data["PHOTO"] = vobj.photo.value
+                logger.debug("Preserved existing photo")
+        except Exception as parse_err:
+            raise Exception(f"Failed to parse existing vCard: {parse_err}")
         
         # Process form data
         first_name = request.form.get('first_name', '').strip()
@@ -623,16 +555,10 @@ def update_contact():
         logger.info(f"Updating vCard at {url}:\n{vcard_content}")
         
         # Update the contact
-        # Prepare headers with ETag if available
-        headers = {
-            "Content-Type": "text/vcard",
-            "If-Match": f'"{etag}"' if etag else "*"
-        }
-        
         response = abook['session'].put(
             url,
             data=vcard_content,
-            headers=headers
+            headers={"Content-Type": "text/vcard"}
         )
         if response.status_code not in (200, 201, 204):
             raise Exception(f"Failed to update contact: status {response.status_code}, body: {response.text}")
