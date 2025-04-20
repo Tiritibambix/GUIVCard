@@ -318,10 +318,24 @@ def contacts():
         contacts = []
         logger.info("Listing contacts...")
         
+        # Préparer le corps XML pour PROPFIND avec address-data
+        propfind_body = '''<?xml version="1.0" encoding="utf-8" ?>
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+        <D:getetag/>
+        <D:getcontenttype/>
+        <C:address-data/>
+    </D:prop>
+</D:propfind>'''
+
         response = abook['session'].request(
             'PROPFIND',
             abook['url'],
-            headers={'Depth': '1'}
+            headers={
+                'Depth': '1',
+                'Content-Type': 'application/xml; charset=utf-8'
+            },
+            data=propfind_body
         )
         
         if response.status_code == 207:
@@ -334,21 +348,19 @@ def contacts():
             ns = {'D': 'DAV:'}
             for elem in root.findall('.//D:response', ns):
                 href = elem.find('.//D:href', ns).text
+                # Extraire l'URL et les données vCard de la réponse PROPFIND
                 if not href.endswith('.vcf'):
                     continue
-                    
-                # Get the vCard data
-                card_url = urlparse(CARDDAV_URL).scheme + '://' + urlparse(CARDDAV_URL).netloc + href
-                logger.info(f"Fetching vCard from: {card_url}")
-                card_response = abook['session'].get(card_url)
-                
-                if card_response.status_code != 200:
-                    logger.warning(f"Failed to fetch vCard {href}: {card_response.status_code}")
+
+                # Trouver les données vCard dans la réponse XML
+                address_data = elem.find('.//C:address-data', {'C': 'urn:ietf:params:xml:ns:carddav'})
+                if address_data is None:
+                    logger.warning(f"No address data found for {href}")
                     continue
-                    
+
                 try:
-                    # First try to parse without validation
-                    vcard_data = vobject.readOne(card_response.text)
+                    # Parser les données vCard directement depuis la réponse PROPFIND
+                    vcard_data = vobject.readOne(address_data.text)
                     
                     # If successful, extract data safely
                     contact_info = {
