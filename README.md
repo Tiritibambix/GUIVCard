@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="static/media/guivcard-banner.png" alt="GuiVCard Banner" width="400">
+  <img src="static/media/guivcard-banner.png" alt="GUIVCard Banner" width="400">
 </p>
 
-# GuiVCard
+# GUIVCard
 
-GuiVCard is a web application designed to manage contacts via a CardDAV server. It provides an intuitive user interface and advanced features for seamless contact management.
+GUIVCard is a web application designed to manage contacts via a CardDAV server. It provides an intuitive user interface and advanced features for seamless contact management.
 
 ## Features
 

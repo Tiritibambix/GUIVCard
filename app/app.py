@@ -31,7 +31,7 @@ CARDDAV_URL = os.environ['CARDDAV_URL']
 ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
 ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
 
-logger.info(f"Starting GuiVCard with CardDAV URL: {CARDDAV_URL}")
+logger.info(f"Starting GUIVCard with CardDAV URL: {CARDDAV_URL}")
 
 @app.route('/')
 def index():
@@ -66,7 +66,7 @@ try:
     auth_header = base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
     headers = {
         'Authorization': f'Basic {auth_header}',
-        'User-Agent': 'GuiVCard/1.0',
+        'User-Agent': 'GUIVCard/1.0',
         'Depth': '1'
     }
     
@@ -213,7 +213,7 @@ def get_carddav_client():
         session = requests.Session()
         session.auth = (ADMIN_USERNAME, ADMIN_PASSWORD)
         session.headers.update({
-            'User-Agent': 'GuiVCard/1.0',
+            'User-Agent': 'GUIVCard/1.0',
             'Depth': '0',
             'Accept': 'text/vcard'
         })
