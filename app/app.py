@@ -82,7 +82,26 @@ except Exception as e:
     logger.error(f"Failed to connect to CardDAV server: {str(e)}")
     logger.error(f"Please verify your CardDAV URL: {CARDDAV_URL}")
 
+def getElementText(element):
+    if element is None:
+        return ''
+    if isinstance(element, list):
+        return element[0]
+    return element
 
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth:
+            logger.warning("No authorization header provided")
+            return jsonify({"message": "Authentication required"}), 401
+        if not check_auth(auth.username, auth.password):
+            logger.warning(f"Failed authentication attempt for user: {auth.username}")
+            return jsonify({"message": "Authentication failed"}), 401
+        logger.info(f"Successful authentication for user: {auth.username}")
+        return f(*args, **kwargs)
+    return decorated
 
 def check_auth(username, password):
     if not username or not password:
@@ -456,8 +475,8 @@ def contacts():
 
         try:
             contacts.sort(key=lambda c: (
-                c.get('first_name', '').strip().lower(),
-                c.get('last_name', '').strip().lower()
+                getElementText(c['first_name']).strip().lower(),
+                getElementText(c['last_name']).strip().lower()
             ))
         except Exception as e:
             logger.error(f"Error sorting contacts: {str(e)}")
