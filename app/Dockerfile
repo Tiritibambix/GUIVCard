@@ -19,7 +19,7 @@ RUN apt-get update && \
 # Copy requirements and templates first for better caching
 COPY requirements.txt .
 COPY templates ./templates/
-COPY static ./static/
+COPY ../static ./static/
 
 # Install Python dependencies
 RUN pip install --upgrade pip setuptools wheel && \
