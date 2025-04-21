@@ -46,6 +46,7 @@ GuiVCard is a web application designed to manage contacts via a CardDAV server. 
    - `CARDDAV_URL`: URL of your CardDAV server
    - `ADMIN_USERNAME`: Admin username
    - `ADMIN_PASSWORD`: Admin password
+   - `FLASK_ENV`: Set to `development` for development mode or `production` for production mode
 
 4. Run the application:
    ```bash
