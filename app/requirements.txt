@@ -1,5 +1,5 @@
 Flask==2.3.3
-flask-cors==4.0.2
+flask-cors==6.0.0
 caldav==1.4.0
 requests==2.32.0
 vobject==0.9.6.1
