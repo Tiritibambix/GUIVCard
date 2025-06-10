@@ -1,7 +1,7 @@
 Flask==2.3.3
 flask-cors==6.0.0
 caldav==1.4.0
-requests==2.32.0
+requests==2.32.4
 vobject==0.9.6.1
 Werkzeug==3.0.6
 urllib3>=2.0.0
