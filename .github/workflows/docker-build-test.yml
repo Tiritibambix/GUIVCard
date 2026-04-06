@@ -3,12 +3,12 @@ name: Build and Push Docker Images (test)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   REGISTRY: docker.io
   APP_IMAGE: tiritibambix/guivcard
-
-permissions:
-  contents: read
 
 jobs:
   setup:
@@ -58,11 +58,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: all
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -72,13 +67,13 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image (test tag)
+      - name: Build and push Docker image (test tag, amd64 only)
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.APP_IMAGE }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max

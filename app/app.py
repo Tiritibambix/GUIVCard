@@ -455,10 +455,18 @@ def contacts():
     s = get_user_session()
     carddav_url = get_user_carddav_url()
 
+    # Sort preference: query string > session > default
+    # Read before POST handling so redirect preserves it
+    sort_by = request.args.get('sort') or session.get('sort_by', 'first_name')
+    valid_sorts = {'first_name', 'last_name', 'org', 'email'}
+    if sort_by not in valid_sorts:
+        sort_by = 'first_name'
+    session['sort_by'] = sort_by
+
     if request.method == 'POST':
         if not validate_csrf():
             flash('Invalid request (CSRF).', 'error')
-            return redirect(url_for('contacts'))
+            return redirect(url_for('contacts', sort=sort_by))
         try:
             vcard_data = collect_vcard_data_from_form(request.form, request.files)
             vcard_content = generate_vcard(vcard_data)
@@ -471,11 +479,7 @@ def contacts():
         except Exception as e:
             logger.error(f"Error creating contact: {e}")
             flash(f"Error creating contact: {e}", 'error')
-        return redirect(url_for('contacts'))
-
-    # Sort preference from query string (persisted in session)
-    sort_by = request.args.get('sort', session.get('sort_by', 'first_name'))
-    session['sort_by'] = sort_by
+        return redirect(url_for('contacts', sort=sort_by))
 
     contact_list = []
     try:
@@ -556,7 +560,7 @@ def update_contact():
         logger.error(f"Error updating contact: {e}")
         flash(f"Error updating contact: {e}", 'error')
 
-    return redirect(url_for('contacts'))
+    return redirect(url_for('contacts', sort=session.get('sort_by', 'first_name')))
 
 
 @app.route('/contacts/<contact_id>/delete', methods=['POST'])
@@ -579,7 +583,7 @@ def delete_contact(contact_id):
         logger.error(f"Error deleting contact: {e}")
         flash(f"Error deleting contact: {e}", 'error')
 
-    return redirect(url_for('contacts'))
+    return redirect(url_for('contacts', sort=session.get('sort_by', 'first_name')))
 
 
 if __name__ == '__main__':
