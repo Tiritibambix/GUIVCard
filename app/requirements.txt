@@ -3,6 +3,6 @@ flask-cors==6.0.0
 gunicorn==23.0.0
 requests==2.33.0
 vobject==0.9.6.1
-Werkzeug==3.1.6
+Werkzeug==3.1.8
 urllib3>=2.0.0
 setuptools
