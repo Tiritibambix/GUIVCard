@@ -6,7 +6,7 @@ services:
     environment:
       # Clé secrète Flask — générer avec : python3 -c "import secrets; print(secrets.token_hex(32))"
       - SECRET_KEY=${SECRET_KEY}
-      # URL CardDAV avec placeholder {username} pour le multi-utilisateurs :
+      # URL CardDAV. Utiliser {username} comme placeholder pour le multi-utilisateurs :
       #   http://radicale:5232/{username}/contacts/
       # Ou une collection fixe (mono-utilisateur) :
       #   http://radicale:5232/admin/contacts/
@@ -21,6 +21,3 @@ services:
 # Configuration (.env) :
 #   SECRET_KEY=<valeur générée>
 #   CARDDAV_URL=http://radicale:5232/{username}/contacts/
-#
-# L'authentification est vérifiée directement auprès de Radicale.
-# Chaque utilisateur voit uniquement sa propre collection.

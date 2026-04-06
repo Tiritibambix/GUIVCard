@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
+from flask import Flask, request, render_template, redirect, url_for, session, flash
 from functools import wraps
 import os
 import vobject
@@ -11,7 +11,6 @@ import uuid
 import secrets
 from typing import Dict, Optional
 
-# Configure logging
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
@@ -23,18 +22,34 @@ logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 app = Flask(__name__)
 
-# Secret key must be set via env var for session persistence across restarts
 secret_key = os.environ.get('SECRET_KEY')
 if not secret_key:
     logger.warning("SECRET_KEY not set — generating ephemeral key. Sessions will be lost on restart.")
     secret_key = secrets.token_hex(32)
 app.secret_key = secret_key
 
-logger.info("GUIVCard starting.")
+# ---------------------------------------------------------------------------
+# CardDAV URL construction
+# CARDDAV_URL supports {username} placeholder for multi-user setups:
+#   http://radicale:5232/{username}/contacts/
+# Or a fixed collection (single-user):
+#   http://radicale:5232/admin/contacts/
+# ---------------------------------------------------------------------------
+CARDDAV_URL_TEMPLATE = os.environ.get('CARDDAV_URL', '').rstrip('/')
+if not CARDDAV_URL_TEMPLATE:
+    logger.error("CARDDAV_URL environment variable is not set.")
+else:
+    logger.info(f"GUIVCard starting. CardDAV template: {CARDDAV_URL_TEMPLATE}")
+
+
+def build_user_url(username: str) -> str:
+    if '{username}' in CARDDAV_URL_TEMPLATE:
+        return CARDDAV_URL_TEMPLATE.replace('{username}', username)
+    return CARDDAV_URL_TEMPLATE
 
 
 # ---------------------------------------------------------------------------
-# CSRF protection (lightweight, no external dep)
+# CSRF
 # ---------------------------------------------------------------------------
 
 def generate_csrf_token():
@@ -53,39 +68,29 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
 
 # ---------------------------------------------------------------------------
-# Auth helpers
+# Auth
 # ---------------------------------------------------------------------------
 
-
-
-
-def check_auth(username: str, password: str, carddav_url: str) -> bool:
-    """Authenticate by attempting a PROPFIND on the provided CardDAV collection URL."""
-    if not username or not password or not carddav_url:
+def check_auth(username: str, password: str) -> bool:
+    """Authenticate by attempting a PROPFIND against the user's CardDAV collection."""
+    if not username or not password:
         return False
     try:
-        parsed = urlparse(carddav_url)
-        if not parsed.scheme or not parsed.netloc:
-            raise ValueError("URL CardDAV invalide (schéma ou hôte manquant).")
+        user_url = build_user_url(username)
         resp = requests.request(
-            'PROPFIND',
-            carddav_url,
+            'PROPFIND', user_url,
             auth=(username, password),
             headers={'Depth': '0', 'User-Agent': 'GUIVCard/2.0'},
             timeout=10
         )
-        logger.info(f"Auth attempt for '{username}' on {carddav_url}: CardDAV returned {resp.status_code}")
+        logger.info(f"Auth '{username}' → {user_url} : {resp.status_code}")
         return resp.status_code == 207
-    except ValueError as e:
-        logger.warning(f"Invalid CardDAV URL '{carddav_url}': {e}")
-        raise
     except Exception as e:
         logger.error(f"Auth error for '{username}': {e}")
         return False
 
 
 def get_user_session() -> requests.Session:
-    """Build a requests.Session using credentials stored in the Flask session."""
     s = requests.Session()
     s.auth = (session['username'], session['password'])
     s.headers.update({'User-Agent': 'GUIVCard/2.0'})
@@ -93,7 +98,7 @@ def get_user_session() -> requests.Session:
 
 
 def get_user_carddav_url() -> str:
-    return session['carddav_url']
+    return build_user_url(session['username'])
 
 
 def check_login_required(f):
@@ -110,7 +115,6 @@ def check_login_required(f):
 # ---------------------------------------------------------------------------
 
 def escape_vcard_value(value: str) -> str:
-    """Escape special characters in vCard field values (RFC 6350)."""
     if not value:
         return ''
     value = value.replace('\\', '\\\\')
@@ -121,7 +125,6 @@ def escape_vcard_value(value: str) -> str:
 
 
 def generate_vcard(data: Dict) -> str:
-    """Generate a vCard 3.0 string from a field dictionary."""
     uid = data.get('UID') or str(uuid.uuid4())
     lines = ['BEGIN:VCARD', 'VERSION:3.0']
 
@@ -175,7 +178,6 @@ def generate_vcard(data: Dict) -> str:
 
 
 def normalize_birthday_to_iso(bday: str) -> str:
-    """Convert DD/MM/YYYY -> YYYY-MM-DD."""
     bday = bday.strip()
     if '/' in bday:
         parts = bday.split('/')
@@ -186,7 +188,6 @@ def normalize_birthday_to_iso(bday: str) -> str:
 
 
 def normalize_birthday_to_display(bday: str) -> str:
-    """Convert YYYY-MM-DD -> DD/MM/YYYY for display."""
     bday = bday.strip()
     if '-' in bday:
         parts = bday.split('-')
@@ -197,7 +198,6 @@ def normalize_birthday_to_display(bday: str) -> str:
 
 
 def parse_contacts_from_report(response_content: bytes) -> list:
-    """Parse a CardDAV REPORT response and return a list of contact dicts."""
     from xml.etree import ElementTree
     contacts = []
 
@@ -213,12 +213,13 @@ def parse_contacts_from_report(response_content: bytes) -> list:
         href_el = elem.find('.//D:href', ns)
         if href_el is None:
             continue
-        href = href_el.text
+        href = href_el.text or ''
         if not href.endswith('.vcf'):
             continue
 
         address_data = elem.find('.//C:address-data', ns)
         if address_data is None or not address_data.text:
+            logger.debug(f"No address-data for {href}")
             continue
 
         try:
@@ -307,6 +308,7 @@ def parse_contacts_from_report(response_content: bytes) -> list:
             pass
 
         contacts.append(contact)
+        logger.debug(f"Parsed contact: {contact['name']} ({href})")
 
     try:
         contacts.sort(key=lambda c: (
@@ -320,7 +322,6 @@ def parse_contacts_from_report(response_content: bytes) -> list:
 
 
 def collect_vcard_data_from_form(form, files=None) -> dict:
-    """Extract and validate vCard data from a Flask form."""
     first_name = form.get('first_name', '').strip()
     last_name = form.get('last_name', '').strip()
 
@@ -377,26 +378,20 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        carddav_url = request.form.get('carddav_url', '').strip().rstrip('/')
 
-        if not username or not password or not carddav_url:
-            flash('Veuillez remplir tous les champs.', 'error')
-            return render_template('login.html', carddav_url=carddav_url, username=username)
+        if not username or not password:
+            flash('Veuillez saisir un identifiant et un mot de passe.', 'error')
+            return render_template('login.html')
 
-        try:
-            if check_auth(username, password, carddav_url):
-                session['username'] = username
-                session['password'] = password
-                session['carddav_url'] = carddav_url
-                logger.info(f"User '{username}' logged in on {carddav_url}")
-                return redirect(url_for('contacts'))
-            else:
-                logger.warning(f"Failed login for '{username}' on {carddav_url}")
-                flash('Identifiants incorrects ou accès refusé par le serveur CardDAV.', 'error')
-        except ValueError as e:
-            flash(str(e), 'error')
+        if check_auth(username, password):
+            session['username'] = username
+            session['password'] = password
+            logger.info(f"User '{username}' logged in")
+            return redirect(url_for('contacts'))
 
-        return render_template('login.html', carddav_url=carddav_url, username=username)
+        logger.warning(f"Failed login for '{username}'")
+        flash('Identifiants incorrects ou accès refusé par le serveur CardDAV.', 'error')
+        return render_template('login.html')
 
     return render_template('login.html')
 
@@ -419,7 +414,11 @@ def health_check():
         resp = s.request('PROPFIND', carddav_url, headers={'Depth': '1'}, timeout=10)
         status['is_healthy'] = resp.status_code == 207
         status['status_code'] = resp.status_code
-        status['message'] = 'Connexion au carnet d\'adresses réussie.' if status['is_healthy'] else f"Réponse inattendue : {resp.status_code}"
+        status['message'] = (
+            'Connexion au carnet d\'adresses réussie.'
+            if status['is_healthy']
+            else f"Réponse inattendue : {resp.status_code}"
+        )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         status['error'] = str(e)
@@ -441,8 +440,8 @@ def contacts():
             vcard_data = collect_vcard_data_from_form(request.form, request.files)
             vcard_content = generate_vcard(vcard_data)
             filename = f"{base64.urlsafe_b64encode(os.urandom(12)).decode()}.vcf"
-            url = f"{carddav_url.rstrip('/')}/{filename}"
-            resp = s.put(url, data=vcard_content, headers={'Content-Type': 'text/vcard'}, timeout=10)
+            put_url = f"{carddav_url.rstrip('/')}/{filename}"
+            resp = s.put(put_url, data=vcard_content, headers={'Content-Type': 'text/vcard'}, timeout=10)
             if resp.status_code not in (201, 204):
                 raise Exception(f"Statut {resp.status_code} : {resp.text[:200]}")
             flash('Contact créé avec succès.', 'success')
@@ -451,24 +450,34 @@ def contacts():
             flash(f"Erreur lors de la création : {e}", 'error')
         return redirect(url_for('contacts'))
 
+    # List contacts via CardDAV REPORT
     contact_list = []
     try:
         report_body = '''<?xml version="1.0" encoding="utf-8" ?>
-        <C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
-            <D:prop><D:getetag/><C:address-data/></D:prop>
-        </C:addressbook-query>'''
+<C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+        <D:getetag/>
+        <C:address-data/>
+    </D:prop>
+</C:addressbook-query>'''
 
         resp = s.request(
             'REPORT', carddav_url,
-            headers={'Depth': '1', 'Content-Type': 'application/xml'},
-            data=report_body, timeout=30
+            headers={
+                'Depth': '1',
+                'Content-Type': 'application/xml; charset=utf-8',
+            },
+            data=report_body.encode('utf-8'),
+            timeout=30
         )
+
+        logger.info(f"REPORT {carddav_url} → {resp.status_code}")
 
         if resp.status_code == 207:
             contact_list = parse_contacts_from_report(resp.content)
             logger.info(f"Loaded {len(contact_list)} contacts for '{session['username']}'")
         else:
-            logger.error(f"REPORT failed: {resp.status_code}")
+            logger.error(f"REPORT failed: {resp.status_code} — {resp.text[:300]}")
             flash(f"Impossible de charger les contacts (statut {resp.status_code}).", 'error')
     except Exception as e:
         logger.error(f"Error listing contacts: {e}")
@@ -492,10 +501,9 @@ def update_contact():
         if not contact_id:
             raise Exception("contact_id manquant")
 
-        url = f"{carddav_url.rstrip('/')}/{contact_id}"
+        contact_url = f"{carddav_url.rstrip('/')}/{contact_id}"
 
-        # Fetch existing vCard (once only)
-        existing_resp = s.get(url, timeout=10)
+        existing_resp = s.get(contact_url, timeout=10)
         if existing_resp.status_code != 200:
             raise Exception(f"Impossible de récupérer le contact : statut {existing_resp.status_code}")
 
@@ -508,12 +516,11 @@ def update_contact():
         vcard_data = collect_vcard_data_from_form(request.form, request.files)
         vcard_data['UID'] = existing_uid
 
-        # Preserve existing photo if no new one uploaded
         if 'PHOTO' not in vcard_data and 'photo' in vobj.contents:
             vcard_data['PHOTO'] = vobj.photo.value
 
         vcard_content = generate_vcard(vcard_data)
-        resp = s.put(url, data=vcard_content, headers={'Content-Type': 'text/vcard'}, timeout=10)
+        resp = s.put(contact_url, data=vcard_content, headers={'Content-Type': 'text/vcard'}, timeout=10)
         if resp.status_code not in (200, 201, 204):
             raise Exception(f"Statut {resp.status_code} : {resp.text[:200]}")
 
@@ -536,8 +543,8 @@ def delete_contact(contact_id):
     carddav_url = get_user_carddav_url()
 
     try:
-        url = f"{carddav_url.rstrip('/')}/{contact_id}"
-        resp = s.delete(url, timeout=10)
+        contact_url = f"{carddav_url.rstrip('/')}/{contact_id}"
+        resp = s.delete(contact_url, timeout=10)
         if resp.status_code not in (200, 204):
             raise Exception(f"Statut {resp.status_code}")
         flash('Contact supprimé.', 'success')
@@ -549,5 +556,5 @@ def delete_contact(contact_id):
 
 
 if __name__ == '__main__':
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    app.run(host='0.0.0.0', debug=debug)
+    # Dev only — production uses gunicorn (see Dockerfile)
+    app.run(host='0.0.0.0', port=5000, debug=True)

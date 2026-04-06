@@ -14,10 +14,10 @@ RUN apt-get update && \
         python3-wheel && \
     rm -rf /var/lib/apt/lists/*
 
-    COPY app/requirements.txt .
-    COPY app/templates ./templates/
-    COPY app/app.py .
-    COPY static ./static/
+COPY app/requirements.txt .
+COPY app/templates ./templates/
+COPY app/app.py .
+COPY static ./static/
 
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
@@ -27,4 +27,4 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 5000
 
-CMD ["python", "-u", "app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "60", "app:app"]

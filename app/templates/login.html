@@ -11,15 +11,15 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:         #0f1117;
-      --surface:    #181c27;
-      --border:     #2a2f3e;
-      --accent:     #6c9fff;
+      --bg: #0f1117;
+      --surface: #181c27;
+      --border: #2a2f3e;
+      --accent: #6c9fff;
       --accent-dim: rgba(108,159,255,.12);
-      --text:       #e8eaf0;
-      --muted:      #8892a4;
-      --error:      #ff6b6b;
-      --success:    #6bcb77;
+      --text: #e8eaf0;
+      --muted: #8892a4;
+      --error: #ff6b6b;
+      --success: #6bcb77;
     }
 
     body {
@@ -33,12 +33,13 @@
       overflow: hidden;
     }
 
+    /* Animated background orbs */
     body::before, body::after {
       content: '';
       position: fixed;
       border-radius: 50%;
       filter: blur(80px);
-      opacity: .22;
+      opacity: .25;
       pointer-events: none;
     }
     body::before {
@@ -53,6 +54,7 @@
       bottom: -100px; right: -100px;
       animation: drift 15s ease-in-out infinite alternate-reverse;
     }
+
     @keyframes drift {
       from { transform: translate(0,0) scale(1); }
       to   { transform: translate(40px,30px) scale(1.08); }
@@ -62,124 +64,110 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 44px 40px;
+      padding: 48px 44px;
       width: 100%;
-      max-width: 420px;
+      max-width: 400px;
       position: relative;
       z-index: 1;
       box-shadow: 0 32px 80px rgba(0,0,0,.5);
-      animation: appear .35s ease both;
+      animation: appear .4s ease both;
     }
+
     @keyframes appear {
-      from { opacity: 0; transform: translateY(14px); }
+      from { opacity: 0; transform: translateY(16px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
     .logo-area {
       text-align: center;
-      margin-bottom: 32px;
+      margin-bottom: 36px;
     }
+
     .logo-area h1 {
       font-family: 'DM Serif Display', serif;
       font-size: 2rem;
       letter-spacing: -.5px;
+      color: var(--text);
     }
+
     .logo-area p {
       color: var(--muted);
-      font-size: .85rem;
+      font-size: .875rem;
       margin-top: 6px;
       font-weight: 300;
     }
 
     .alert {
       padding: 10px 14px;
-      border-radius: 9px;
-      font-size: .84rem;
-      margin-bottom: 18px;
-    }
-    .alert.error   { background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.28); color: var(--error); }
-    .alert.success { background: rgba(107,203,119,.1); border: 1px solid rgba(107,203,119,.28); color: var(--success); }
-
-    .divider {
-      font-size: .68rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .12em;
-      color: var(--muted);
-      margin: 4px 0 16px;
+      border-radius: 8px;
+      font-size: .85rem;
+      margin-bottom: 20px;
       display: flex;
-      align-items: center;
-      gap: 10px;
+      align-items: flex-start;
+      gap: 8px;
     }
-    .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
+    .alert.error   { background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.3); color: var(--error); }
+    .alert.success { background: rgba(107,203,119,.1); border: 1px solid rgba(107,203,119,.3); color: var(--success); }
 
-    .field { margin-bottom: 16px; }
+    .field { margin-bottom: 20px; }
 
     label {
       display: block;
-      font-size: .75rem;
+      font-size: .8rem;
       font-weight: 500;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: .08em;
-      margin-bottom: 7px;
+      margin-bottom: 8px;
     }
 
     input[type="text"],
-    input[type="password"],
-    input[type="url"] {
+    input[type="password"] {
       width: 100%;
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 9px;
-      padding: 11px 14px;
+      border-radius: 10px;
+      padding: 12px 16px;
       color: var(--text);
       font-family: 'DM Sans', sans-serif;
-      font-size: .9rem;
-      outline: none;
+      font-size: .95rem;
       transition: border-color .2s, box-shadow .2s;
+      outline: none;
     }
+
     input:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-dim);
     }
-    input::placeholder { color: #3d4457; }
-
-    .field-hint {
-      font-size: .72rem;
-      color: var(--muted);
-      margin-top: 5px;
-      opacity: .7;
-    }
 
     .btn-primary {
       width: 100%;
-      margin-top: 10px;
+      margin-top: 8px;
       background: var(--accent);
       color: #fff;
       border: none;
-      border-radius: 9px;
+      border-radius: 10px;
       padding: 13px;
       font-family: 'DM Sans', sans-serif;
-      font-size: .92rem;
+      font-size: .95rem;
       font-weight: 500;
       cursor: pointer;
       transition: opacity .2s, transform .1s;
+      letter-spacing: .02em;
     }
-    .btn-primary:hover  { opacity: .88; }
-    .btn-primary:active { transform: scale(.985); }
+    .btn-primary:hover   { opacity: .88; }
+    .btn-primary:active  { transform: scale(.985); }
 
-    .footer-note {
-      margin-top: 22px;
+    .carddav-note {
+      margin-top: 24px;
       text-align: center;
-      font-size: .76rem;
+      font-size: .78rem;
       color: var(--muted);
-      opacity: .65;
+    }
+    .carddav-note svg {
+      vertical-align: middle;
+      margin-right: 4px;
+      opacity: .6;
     }
   </style>
 </head>
@@ -187,7 +175,7 @@
   <div class="card">
     <div class="logo-area">
       <h1>GUIVCard</h1>
-      <p>Connexion à votre carnet CardDAV</p>
+      <p>Connexion avec vos identifiants CardDAV</p>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -198,34 +186,21 @@
 
     <form method="POST" action="{{ url_for('login') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-      <div class="divider">Serveur</div>
-      <div class="field">
-        <label for="carddav_url">URL de la collection CardDAV</label>
-        <input type="text" id="carddav_url" name="carddav_url" required
-               value="{{ carddav_url or '' }}"
-               placeholder="https://radicale.example.com/user/contacts/"
-               autocomplete="url" autofocus>
-        <p class="field-hint">L'URL complète de votre carnet d'adresses sur Radicale.</p>
-      </div>
-
-      <div class="divider">Identifiants</div>
       <div class="field">
         <label for="username">Identifiant</label>
-        <input type="text" id="username" name="username" required
-               value="{{ username or '' }}"
-               autocomplete="username">
+        <input type="text" id="username" name="username" required autocomplete="username" autofocus>
       </div>
       <div class="field">
         <label for="password">Mot de passe</label>
-        <input type="password" id="password" name="password" required
-               autocomplete="current-password">
+        <input type="password" id="password" name="password" required autocomplete="current-password">
       </div>
-
       <button type="submit" class="btn-primary">Se connecter</button>
     </form>
 
-    <p class="footer-note">Authentification vérifiée directement auprès du serveur Radicale</p>
+    <p class="carddav-note">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Authentification via le serveur Radicale
+    </p>
   </div>
 </body>
 </html>
