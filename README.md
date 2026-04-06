@@ -1,94 +1,116 @@
 <p align="center">
-  <img src="static/media/guivcard-banner.png" alt="GUIVCard Banner" width="400">
+  <img src="static/media/guivcard-banner.png" alt="GUIVCard" width="100%">
 </p>
+
+---
+
+> ⚠️ **Security notice**
+>
+> This application has been vibe coded and is designed for local or trusted-network use only. Exposing it to the public internet without an additional access-control layer (reverse proxy with auth, VPN, etc.) is done at your own risk.
+
+---
 
 # GUIVCard
 
-GUIVCard is a web application designed to manage contacts via a CardDAV server. It provides an intuitive user interface and advanced features for seamless contact management.
+A clean, dark-themed web interface for managing contacts stored on a [Radicale](https://radicale.org) CardDAV server. No database, no user accounts — authentication is delegated entirely to Radicale.
 
 ## Features
 
-- **Secure Authentication**: Login with username and password.
-- **Contact Management**:
-  - Add, update, and delete contacts.
-  - Display detailed contact information.
-  - Dynamic search among contacts.
-- **CardDAV Integration**:
-  - Retrieve and manage contacts from a CardDAV server.
-  - Generate and update vCards.
-- **Modern User Interface**:
-  - Design powered by Tailwind CSS.
-  - Responsive layout for all devices.
-  - Scrollable interface for long content.
+### Authentication
+- Login with your Radicale credentials (username + password)
+- Authentication verified via `PROPFIND` against your CardDAV collection — no separate user store
+- Multi-user: each user accesses only their own address book, isolated by URL (`{username}` placeholder)
+- CSRF protection on all state-changing requests
+- Flask session secured with a configurable `SECRET_KEY`
 
-## Prerequisites
+### Contact management
+- **Create** contacts with first name, last name (optional), organization, email, phone, website, birthday, address, notes, and photo
+- **Edit** contacts in a modal — existing photo preserved unless a new one is uploaded
+- **Delete** contacts with a confirmation dialog
+- vCard 3.0 generation with proper RFC-compliant escaping
 
-- Python 3.8 or higher
-- A functional CardDAV server
-- Dependencies listed in `requirements.txt`
+### Browse & sort
+- Live search across name, email, phone, organization, address fields — no page reload
+- Sort by **first name**, **last name**, or **organization** — preference persisted across actions
+- Empty fields pushed to the bottom on all sort modes
+- Contact counter updates in real time while filtering
 
-## Installation
+### UI
+- Dark theme, custom CSS — no CDN dependency
+- Avatar with initials fallback when no photo is available
+- Flash messages colored by type: green for success, red for error
+- Fully accessible: labels on all inputs, ARIA roles on dialogs, keyboard navigation (Escape closes modals)
 
-### Local Installation (Python)
+### Infrastructure
+- Runs on **gunicorn** (production WSGI server) — no Flask dev server warning
+- Docker image published on Docker Hub: `tiritibambix/guivcard`
+- Multi-architecture builds: `linux/amd64`, `linux/arm64`
+- Dependency security audit via `pip-audit` on every push
+- GitHub Actions CI with explicit `GITHUB_TOKEN` permission scoping
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-repo/GUIVCard.git
-   cd GUIVCard
-   ```
+## Requirements
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+- A running [Radicale](https://radicale.org) CardDAV server
+- Docker (recommended) or Python 3.11+
 
-3. Configure environment variables:
-   - `CARDDAV_URL`: URL of your CardDAV server
-   - `ADMIN_USERNAME`: Admin username
-   - `ADMIN_PASSWORD`: Admin password
-   - `FLASK_ENV`: Set to `development` for development mode or `production` for production mode
+## Quick start with Docker
 
-4. Run the application:
-   ```bash
-   python app/app.py
-   ```
+**1. Create a `.env` file:**
 
-### Docker Installation
+```env
+SECRET_KEY=<generate with: python3 -c "import secrets; print(secrets.token_hex(32))">
+CARDDAV_URL=http://radicale:5232/{username}/contacts/
+```
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-repo/GUIVCard.git
-   cd GUIVCard
-   ```
+`{username}` is replaced at login time with the authenticated user's username.  
+For a single-user setup, use a fixed URL: `http://radicale:5232/admin/contacts/`
 
-2. Run the application using Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
+**2. Run:**
 
-## Usage
+```bash
+docker compose up -d
+```
 
-The application runs on port 8190.
+**3. Open** `http://YOUR_SERVER_IP:8190` and sign in with your Radicale credentials.
 
-Access the application at:  
-`http://YOUR_SERVER_IP:8190`
+## Environment variables
 
-## Deployment
+| Variable | Required | Description |
+|---|---|---|
+| `SECRET_KEY` | Yes | Flask session signing key. Generate once and keep stable across restarts. |
+| `CARDDAV_URL` | Yes | CardDAV collection URL. Supports `{username}` placeholder for multi-user setups. |
 
-### Configuration
+## Docker Compose example
 
-The application uses Basic Auth with credentials configured in `docker-compose.yml` to authenticate with the CardDAV server.
+```yaml
+services:
+  app:
+    image: tiritibambix/guivcard:latest
+    ports:
+      - "8190:5000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - CARDDAV_URL=${CARDDAV_URL}
+    restart: unless-stopped
+```
 
-### Security Notes
+## Local development
 
-- Never commit passwords or sensitive information to the repository.
-- Use HTTPS in production.
-- Keep your modified `docker-compose.yml` secure and never commit it.
+```bash
+git clone https://github.com/Tiritibambix/GUIVCard.git
+cd GUIVCard
+pip install -r app/requirements.txt
+export SECRET_KEY=dev CARDDAV_URL=http://localhost:5232/{username}/contacts/
+python app/app.py
+```
 
-## Development
+## CI / CD
 
-The source code is available on GitHub. The project uses GitHub Actions for CI/CD:
-- Automatic building of Docker images
-- Security audit of dependencies
-- Multi-architecture support (amd64, arm64)
-- Automatic Docker Hub updates
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `docker-build.yml` | Push to `main` | Audit deps, build `linux/amd64` + `linux/arm64`, push `:latest` + `:<sha>` |
+| `docker-build-test.yml` | Manual (`workflow_dispatch`) | Audit deps, build `linux/amd64` only, push `:test` |
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE).

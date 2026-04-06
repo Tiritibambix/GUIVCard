@@ -40,10 +40,35 @@ else:
     logger.info("GUIVCard starting. CardDAV template configured.")
 
 
+# Extract the fixed host+scheme from the server-side template at startup.
+# Used to validate that a built URL never escapes the configured server,
+# regardless of what the username contains.
+_TEMPLATE_PARSED = urlparse(CARDDAV_URL_TEMPLATE)
+_ALLOWED_SCHEME  = _TEMPLATE_PARSED.scheme   # e.g. "http" or "https"
+_ALLOWED_HOST    = _TEMPLATE_PARSED.netloc   # e.g. "radicale:5232"
+
+
 def build_user_url(username: str) -> str:
+    """
+    Build the CardDAV collection URL for a given user.
+    The host and scheme are always taken from CARDDAV_URL_TEMPLATE (server-side env var).
+    Only the literal string '{username}' inside the path is replaced — the username
+    cannot alter the scheme, host, or port.
+    Raises ValueError if the resulting URL would point to a different host (SSRF guard).
+    """
     if '{username}' in CARDDAV_URL_TEMPLATE:
-        return CARDDAV_URL_TEMPLATE.replace('{username}', username)
-    return CARDDAV_URL_TEMPLATE
+        url = CARDDAV_URL_TEMPLATE.replace('{username}', username)
+    else:
+        url = CARDDAV_URL_TEMPLATE
+
+    # Hard check: scheme and netloc must exactly match the configured template.
+    parsed = urlparse(url)
+    if parsed.scheme != _ALLOWED_SCHEME or parsed.netloc != _ALLOWED_HOST:
+        raise ValueError(
+            f"Constructed URL does not match the configured CardDAV server. "
+            "Possible SSRF attempt via username."
+        )
+    return url
 
 
 # ---------------------------------------------------------------------------
@@ -72,10 +97,17 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 # ---------------------------------------------------------------------------
 
 def check_auth(username: str, password: str) -> bool:
-    """Authenticate by PROPFIND against the user's CardDAV collection."""
+    """Authenticate by PROPFIND against the user's CardDAV collection.
+    build_user_url() enforces that the URL host matches the server-side template,
+    so the username cannot redirect the request to an arbitrary host (SSRF guard).
+    """
     if not username or not password:
         return False
-    user_url = build_user_url(username)
+    try:
+        user_url = build_user_url(username)  # raises ValueError on SSRF attempt
+    except ValueError as e:
+        logger.error(f"Auth rejected: {e}")
+        return False
     try:
         resp = requests.request(
             'PROPFIND', user_url,
@@ -83,11 +115,8 @@ def check_auth(username: str, password: str) -> bool:
             headers={'Depth': '0', 'User-Agent': 'GUIVCard/2.0'},
             timeout=10
         )
-        # CodeQL SSRF note: user_url is derived from CARDDAV_URL_TEMPLATE (server-side env var).
-        # Only the {username} fragment is user-controlled, not the host/scheme.
-        # noinspection PyUnresolvedReferences
         success = resp.status_code == 207
-        logger.info(f"Auth attempt for user: CardDAV returned {resp.status_code}")
+        logger.info(f"Auth attempt: CardDAV returned {resp.status_code}")
         return success
     except Exception as e:
         logger.error(f"Auth error: {e}")
