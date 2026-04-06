@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,517 +9,171 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:        #0f1117;
-      --surface:   #181c27;
-      --surface2:  #1e2333;
-      --border:    #252b3b;
-      --border2:   #2f3749;
-      --accent:    #6c9fff;
-      --accent2:   #4c7fe0;
-      --accent-dim: rgba(108,159,255,.1);
-      --text:      #e8eaf0;
-      --muted:     #8892a4;
-      --muted2:    #606878;
-      --danger:    #ff6b6b;
-      --danger-dim: rgba(255,107,107,.12);
-      --success:   #6bcb77;
-      --success-dim: rgba(107,203,119,.12);
-      --warn-dim:  rgba(255,193,68,.12);
-      --warn:      #ffc144;
+      --bg:#0f1117; --surface:#181c27; --surface2:#1e2333; --border:#252b3b; --border2:#2f3749;
+      --accent:#6c9fff; --accent2:#4c7fe0; --accent-dim:rgba(108,159,255,.1);
+      --text:#e8eaf0; --muted:#8892a4; --muted2:#606878;
+      --danger:#ff6b6b; --danger-dim:rgba(255,107,107,.12);
+      --success:#6bcb77; --success-dim:rgba(107,203,119,.12);
+      --warn:#ffc144; --warn-dim:rgba(255,193,68,.12);
     }
+    html { scroll-behavior:smooth; }
+    body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
 
-    html { scroll-behavior: smooth; }
-
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
-
-    /* ── Nav ── */
     nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(24,28,39,.9);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      height: 58px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      position:sticky; top:0; z-index:100;
+      background:rgba(24,28,39,.9); backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--border);
+      padding:0 24px; height:58px;
+      display:flex; align-items:center; justify-content:space-between;
     }
-
     .nav-brand {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1.25rem;
-      color: var(--text);
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      font-family:'DM Serif Display',serif; font-size:1.25rem;
+      color:var(--text); text-decoration:none;
+      display:flex; align-items:center; gap:10px;
     }
-    .nav-brand .dot {
-      width: 8px; height: 8px;
-      background: var(--accent);
-      border-radius: 50%;
-      display: inline-block;
-    }
+    .nav-brand .dot { width:8px; height:8px; background:var(--accent); border-radius:50%; }
+    .nav-right { display:flex; align-items:center; gap:6px; }
+    .nav-user { font-size:.8rem; color:var(--muted); padding:4px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; }
+    .nav-link { font-size:.82rem; color:var(--muted); text-decoration:none; padding:6px 12px; border-radius:8px; border:1px solid transparent; transition:all .15s; }
+    .nav-link:hover { color:var(--text); background:var(--surface2); border-color:var(--border); }
 
-    .nav-right {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .flash-area { max-width:900px; margin:16px auto 0; padding:0 20px; display:flex; flex-direction:column; gap:8px; }
+    .flash { padding:10px 16px; border-radius:10px; font-size:.875rem; display:flex; align-items:center; gap:10px; animation:slideDown .25s ease; }
+    .flash.success { background:var(--success-dim); border:1px solid rgba(107,203,119,.25); color:var(--success); }
+    .flash.error   { background:var(--danger-dim);  border:1px solid rgba(255,107,107,.25); color:var(--danger); }
+    .flash.message { background:var(--warn-dim);    border:1px solid rgba(255,193,68,.25);  color:var(--warn); }
+    @keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 
-    .nav-user {
-      font-size: .8rem;
-      color: var(--muted);
-      padding: 4px 10px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-    }
+    main { max-width:900px; margin:0 auto; padding:24px 20px 60px; }
 
-    .nav-link {
-      font-size: .82rem;
-      color: var(--muted);
-      text-decoration: none;
-      padding: 6px 12px;
-      border-radius: 8px;
-      border: 1px solid transparent;
-      transition: all .15s;
-    }
-    .nav-link:hover { color: var(--text); background: var(--surface2); border-color: var(--border); }
+    .toolbar { display:flex; align-items:center; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
 
-    /* ── Flash messages ── */
-    .flash-area {
-      max-width: 860px;
-      margin: 16px auto 0;
-      padding: 0 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .flash {
-      padding: 10px 16px;
-      border-radius: 10px;
-      font-size: .875rem;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      animation: slideDown .25s ease;
-    }
-    .flash.success { background: var(--success-dim); border: 1px solid rgba(107,203,119,.25); color: var(--success); }
-    .flash.error   { background: var(--danger-dim);  border: 1px solid rgba(255,107,107,.25); color: var(--danger); }
-    .flash.message { background: var(--warn-dim);    border: 1px solid rgba(255,193,68,.25);  color: var(--warn); }
-
-    @keyframes slideDown {
-      from { opacity:0; transform: translateY(-6px); }
-      to   { opacity:1; transform: translateY(0); }
-    }
-
-    /* ── Main layout ── */
-    main {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 24px 20px 60px;
-    }
-
-    /* ── Toolbar ── */
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .search-wrap {
-      flex: 1;
-      min-width: 200px;
-      position: relative;
-    }
-    .search-wrap svg {
-      position: absolute;
-      left: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--muted2);
-      pointer-events: none;
-    }
+    .search-wrap { flex:1; min-width:180px; position:relative; }
+    .search-wrap svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted2); pointer-events:none; }
     #search {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 14px 10px 38px;
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      font-size: .9rem;
-      outline: none;
-      transition: border-color .2s, box-shadow .2s;
+      width:100%; background:var(--surface); border:1px solid var(--border);
+      border-radius:10px; padding:10px 14px 10px 38px; color:var(--text);
+      font-family:'DM Sans',sans-serif; font-size:.9rem; outline:none;
+      transition:border-color .2s, box-shadow .2s;
     }
-    #search::placeholder { color: var(--muted2); }
-    #search:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-dim);
-    }
+    #search::placeholder { color:var(--muted2); }
+    #search:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
 
-    .counter {
-      font-size: .8rem;
-      color: var(--muted);
-      white-space: nowrap;
-      min-width: 80px;
-      text-align: right;
+    /* Sort dropdown */
+    .sort-wrap { position:relative; }
+    .sort-select {
+      appearance:none; background:var(--surface); border:1px solid var(--border);
+      border-radius:10px; padding:10px 32px 10px 14px; color:var(--muted);
+      font-family:'DM Sans',sans-serif; font-size:.82rem; cursor:pointer; outline:none;
+      transition:border-color .2s, box-shadow .2s;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238892a4' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 10px center;
     }
+    .sort-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); color:var(--text); }
+    .sort-select option { background:var(--surface2); color:var(--text); }
+
+    .counter { font-size:.8rem; color:var(--muted); white-space:nowrap; min-width:80px; text-align:right; }
 
     .btn-new {
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 10px 18px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: .875rem;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: opacity .2s, transform .1s;
-      white-space: nowrap;
+      background:var(--accent); color:#fff; border:none; border-radius:10px;
+      padding:10px 18px; font-family:'DM Sans',sans-serif; font-size:.875rem; font-weight:500;
+      cursor:pointer; display:flex; align-items:center; gap:6px;
+      transition:opacity .2s, transform .1s; white-space:nowrap;
     }
-    .btn-new:hover  { opacity: .88; }
-    .btn-new:active { transform: scale(.97); }
+    .btn-new:hover  { opacity:.88; }
+    .btn-new:active { transform:scale(.97); }
 
-    /* ── Contact list ── */
-    .contact-list {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-    }
+    .contact-list { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
 
     .contact-item {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border);
-      transition: background .15s;
+      display:flex; align-items:center; gap:14px;
+      padding:14px 18px; border-bottom:1px solid var(--border);
+      transition:background .15s;
     }
-    .contact-item:last-child { border-bottom: none; }
-    .contact-item:hover { background: var(--surface2); }
+    .contact-item:last-child { border-bottom:none; }
+    .contact-item:hover { background:var(--surface2); }
 
-    /* Avatar */
-    .avatar {
-      flex-shrink: 0;
-      width: 44px; height: 44px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--border2);
-    }
-
+    .avatar { flex-shrink:0; width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid var(--border2); }
     .avatar-initials {
-      flex-shrink: 0;
-      width: 44px; height: 44px;
-      border-radius: 50%;
-      background: var(--accent-dim);
-      border: 2px solid var(--border2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'DM Serif Display', serif;
-      font-size: 1rem;
-      color: var(--accent);
-      user-select: none;
+      flex-shrink:0; width:44px; height:44px; border-radius:50%;
+      background:var(--accent-dim); border:2px solid var(--border2);
+      display:flex; align-items:center; justify-content:center;
+      font-family:'DM Serif Display',serif; font-size:1rem; color:var(--accent); user-select:none;
     }
 
-    .contact-info { flex: 1; min-width: 0; }
+    .contact-info { flex:1; min-width:0; }
+    .contact-name { font-size:.95rem; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .contact-org  { font-size:.78rem; color:var(--muted); margin-top:2px; }
 
-    .contact-name {
-      font-size: .95rem;
-      font-weight: 500;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    .contact-meta { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px; }
+    .meta-item { font-size:.78rem; color:var(--muted); display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px; }
+    .meta-item svg { flex-shrink:0; opacity:.5; }
+    .meta-item a { color:var(--accent); text-decoration:none; }
+    .meta-item a:hover { text-decoration:underline; }
 
-    .contact-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px 12px;
-      margin-top: 4px;
-    }
+    .contact-actions { display:flex; gap:6px; flex-shrink:0; }
+    .btn-icon { width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid var(--border2); background:transparent; cursor:pointer; transition:all .15s; color:var(--muted); }
+    .btn-icon:hover { background:var(--surface2); color:var(--text); }
+    .btn-icon.danger:hover { background:var(--danger-dim); color:var(--danger); border-color:rgba(255,107,107,.3); }
 
-    .meta-item {
-      font-size: .78rem;
-      color: var(--muted);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 240px;
-    }
-    .meta-item svg { flex-shrink: 0; opacity: .5; }
-    .meta-item a { color: var(--accent); text-decoration: none; }
-    .meta-item a:hover { text-decoration: underline; }
+    .empty-state { padding:60px 24px; text-align:center; }
+    .empty-state svg { color:var(--muted2); margin-bottom:16px; }
+    .empty-state h3 { color:var(--muted); font-size:1rem; font-weight:400; }
+    .empty-state p  { color:var(--muted2); font-size:.82rem; margin-top:6px; }
 
-    .contact-org {
-      font-size: .78rem;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    /* Action buttons */
-    .contact-actions {
-      display: flex;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-
-    .btn-icon {
-      width: 34px; height: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      border: 1px solid var(--border2);
-      background: transparent;
-      cursor: pointer;
-      transition: all .15s;
-      color: var(--muted);
-    }
-    .btn-icon:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
-    .btn-icon.danger:hover { background: var(--danger-dim); color: var(--danger); border-color: rgba(255,107,107,.3); }
-
-    /* Empty state */
-    .empty-state {
-      padding: 60px 24px;
-      text-align: center;
-    }
-    .empty-state svg { color: var(--muted2); margin-bottom: 16px; }
-    .empty-state h3 { color: var(--muted); font-size: 1rem; font-weight: 400; }
-    .empty-state p  { color: var(--muted2); font-size: .82rem; margin-top: 6px; }
-
-    /* ── Modal ── */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.7);
-      backdrop-filter: blur(4px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 200;
-      padding: 16px;
-    }
-    .modal-overlay.open {
-      display: flex;
-      animation: fadeIn .2s ease;
-    }
-    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-
+    /* Modal */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:200; padding:16px; }
+    .modal-overlay.open { display:flex; animation:fadeIn .2s ease; }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
     .modal {
-      background: var(--surface);
-      border: 1px solid var(--border2);
-      border-radius: 18px;
-      width: 100%;
-      max-width: 560px;
-      max-height: 92vh;
-      overflow-y: auto;
-      padding: 32px;
-      box-shadow: 0 32px 80px rgba(0,0,0,.6);
-      animation: popIn .22s cubic-bezier(.34,1.56,.64,1);
+      background:var(--surface); border:1px solid var(--border2); border-radius:18px;
+      width:100%; max-width:560px; max-height:92vh; overflow-y:auto;
+      padding:32px; box-shadow:0 32px 80px rgba(0,0,0,.6);
+      animation:popIn .22s cubic-bezier(.34,1.56,.64,1);
     }
-    @keyframes popIn {
-      from { opacity:0; transform: scale(.94); }
-      to   { opacity:1; transform: scale(1); }
-    }
+    @keyframes popIn { from{opacity:0;transform:scale(.94)} to{opacity:1;transform:scale(1)} }
 
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-    }
-    .modal-title {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1.3rem;
-    }
-    .modal-close {
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      border: 1px solid var(--border2);
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all .15s;
-    }
-    .modal-close:hover { background: var(--surface2); color: var(--text); }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+    .modal-title { font-family:'DM Serif Display',serif; font-size:1.3rem; }
+    .modal-close { width:32px; height:32px; border-radius:8px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+    .modal-close:hover { background:var(--surface2); color:var(--text); }
 
-    /* Form inside modal */
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-    .form-row.single { grid-template-columns: 1fr; }
-    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+    .form-group { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+    .form-label { font-size:.75rem; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .form-label .optional { font-size:.7rem; color:var(--muted2); text-transform:none; letter-spacing:0; font-weight:400; margin-left:4px; }
+    .form-input, .form-textarea {
+      background:var(--bg); border:1px solid var(--border2); border-radius:9px;
+      padding:10px 13px; color:var(--text); font-family:'DM Sans',sans-serif;
+      font-size:.9rem; outline:none; transition:border-color .2s, box-shadow .2s; width:100%;
+    }
+    .form-input:focus, .form-textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+    .form-input::placeholder, .form-textarea::placeholder { color:var(--muted2); }
+    .form-textarea { resize:vertical; min-height:72px; }
 
-    .form-label {
-      font-size: .75rem;
-      font-weight: 500;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .08em;
-    }
+    .section-label { font-size:.72rem; font-weight:600; color:var(--muted2); text-transform:uppercase; letter-spacing:.1em; margin:20px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--border); }
 
-    .form-input,
-    .form-textarea {
-      background: var(--bg);
-      border: 1px solid var(--border2);
-      border-radius: 9px;
-      padding: 10px 13px;
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      font-size: .9rem;
-      outline: none;
-      transition: border-color .2s, box-shadow .2s;
-      width: 100%;
-    }
-    .form-input:focus, .form-textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-dim);
-    }
-    .form-input::placeholder, .form-textarea::placeholder { color: var(--muted2); }
-    .form-textarea { resize: vertical; min-height: 72px; }
+    .photo-zone { display:flex; align-items:center; gap:14px; }
+    .photo-preview-img { width:56px; height:56px; border-radius:50%; object-fit:cover; border:2px solid var(--border2); display:none; }
+    .photo-preview-placeholder { width:56px; height:56px; border-radius:50%; background:var(--accent-dim); border:2px dashed var(--border2); display:flex; align-items:center; justify-content:center; color:var(--muted2); }
 
-    .form-hint {
-      font-size: .72rem;
-      color: var(--muted2);
-      margin-top: 2px;
-    }
+    .modal-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; padding-top:20px; border-top:1px solid var(--border); }
+    .btn-cancel { background:transparent; border:1px solid var(--border2); border-radius:9px; padding:10px 20px; color:var(--muted); font-family:'DM Sans',sans-serif; font-size:.875rem; cursor:pointer; transition:all .15s; }
+    .btn-cancel:hover { background:var(--surface2); color:var(--text); }
+    .btn-save { background:var(--accent); border:none; border-radius:9px; padding:10px 24px; color:#fff; font-family:'DM Sans',sans-serif; font-size:.875rem; font-weight:500; cursor:pointer; transition:opacity .2s, transform .1s; }
+    .btn-save:hover  { opacity:.88; }
+    .btn-save:active { transform:scale(.97); }
 
-    .section-label {
-      font-size: .72rem;
-      font-weight: 600;
-      color: var(--muted2);
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      margin: 20px 0 12px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    /* Photo preview */
-    .photo-zone {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .photo-preview-img {
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--border2);
-      display: none;
-    }
-    .photo-preview-placeholder {
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      background: var(--accent-dim);
-      border: 2px dashed var(--border2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--muted2);
-    }
-
-    /* Modal footer */
-    .modal-footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 24px;
-      padding-top: 20px;
-      border-top: 1px solid var(--border);
-    }
-
-    .btn-cancel {
-      background: transparent;
-      border: 1px solid var(--border2);
-      border-radius: 9px;
-      padding: 10px 20px;
-      color: var(--muted);
-      font-family: 'DM Sans', sans-serif;
-      font-size: .875rem;
-      cursor: pointer;
-      transition: all .15s;
-    }
-    .btn-cancel:hover { background: var(--surface2); color: var(--text); }
-
-    .btn-save {
-      background: var(--accent);
-      border: none;
-      border-radius: 9px;
-      padding: 10px 24px;
-      color: #fff;
-      font-family: 'DM Sans', sans-serif;
-      font-size: .875rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity .2s, transform .1s;
-    }
-    .btn-save:hover  { opacity: .88; }
-    .btn-save:active { transform: scale(.97); }
-
-    /* ── Delete confirm dialog ── */
-    .confirm-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.75);
-      backdrop-filter: blur(4px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 300;
-    }
-    .confirm-overlay.open { display: flex; }
-    .confirm-box {
-      background: var(--surface);
-      border: 1px solid rgba(255,107,107,.3);
-      border-radius: 14px;
-      padding: 28px;
-      max-width: 360px;
-      width: 90%;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,.5);
-    }
-    .confirm-box h3 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; margin-bottom: 10px; }
-    .confirm-box p  { font-size: .85rem; color: var(--muted); margin-bottom: 24px; }
-    .confirm-actions { display: flex; gap: 10px; justify-content: center; }
-    .btn-confirm-del {
-      background: var(--danger);
-      border: none;
-      border-radius: 9px;
-      padding: 10px 22px;
-      color: #fff;
-      font-family: 'DM Sans', sans-serif;
-      font-size: .875rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity .2s;
-    }
-    .btn-confirm-del:hover { opacity: .85; }
+    /* Delete confirm */
+    .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:300; }
+    .confirm-overlay.open { display:flex; }
+    .confirm-box { background:var(--surface); border:1px solid rgba(255,107,107,.3); border-radius:14px; padding:28px; max-width:360px; width:90%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+    .confirm-box h3 { font-family:'DM Serif Display',serif; font-size:1.1rem; margin-bottom:10px; }
+    .confirm-box p  { font-size:.85rem; color:var(--muted); margin-bottom:24px; }
+    .confirm-actions { display:flex; gap:10px; justify-content:center; }
+    .btn-confirm-del { background:var(--danger); border:none; border-radius:9px; padding:10px 22px; color:#fff; font-family:'DM Sans',sans-serif; font-size:.875rem; font-weight:500; cursor:pointer; transition:opacity .2s; }
+    .btn-confirm-del:hover { opacity:.85; }
   </style>
 </head>
 <body>
@@ -530,8 +184,8 @@
   </a>
   <div class="nav-right">
     <span class="nav-user">{{ session.username }}</span>
-    <a class="nav-link" href="{{ url_for('health_check') }}">Statut</a>
-    <a class="nav-link" href="{{ url_for('logout') }}">Déconnexion</a>
+    <a class="nav-link" href="{{ url_for('health_check') }}">Status</a>
+    <a class="nav-link" href="{{ url_for('logout') }}">Sign out</a>
   </div>
 </nav>
 
@@ -549,12 +203,22 @@
   <div class="toolbar">
     <div class="search-wrap">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input id="search" type="text" placeholder="Rechercher un contact…" aria-label="Rechercher un contact">
+      <input id="search" type="text" placeholder="Search contacts…" aria-label="Search contacts">
     </div>
+
+    <div class="sort-wrap">
+      <select class="sort-select" id="sort-select" aria-label="Sort by" onchange="applySort(this.value)">
+        <option value="first_name" {{ 'selected' if sort_by == 'first_name' }}>Sort: First name</option>
+        <option value="last_name"  {{ 'selected' if sort_by == 'last_name'  }}>Sort: Last name</option>
+        <option value="org"        {{ 'selected' if sort_by == 'org'        }}>Sort: Organization</option>
+        <option value="email"      {{ 'selected' if sort_by == 'email'      }}>Sort: Email</option>
+      </select>
+    </div>
+
     <span class="counter" id="counter">{{ contacts|length }} contact{{ 's' if contacts|length != 1 }}</span>
     <button class="btn-new" onclick="openNew()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Nouveau
+      New contact
     </button>
   </div>
 
@@ -577,20 +241,14 @@
       data-has-photo="{{ '1' if contact.photo else '0' }}">
 
       {% if contact.photo %}
-      <img class="avatar"
-           src="data:image/jpeg;base64,{{ contact.photo }}"
-           alt="{{ contact.name | e }}">
+      <img class="avatar" src="data:image/jpeg;base64,{{ contact.photo }}" alt="{{ contact.name | e }}">
       {% else %}
-      <div class="avatar-initials">
-        {{ (contact.first_name[:1] or contact.name[:1] or '?') | upper }}
-      </div>
+      <div class="avatar-initials">{{ (contact.first_name[:1] or contact.name[:1] or '?') | upper }}</div>
       {% endif %}
 
       <div class="contact-info">
         <div class="contact-name">{{ contact.name }}</div>
-        {% if contact.org %}
-        <div class="contact-org">{{ contact.org }}</div>
-        {% endif %}
+        {% if contact.org %}<div class="contact-org">{{ contact.org }}</div>{% endif %}
         <div class="contact-meta">
           {% if contact.email %}
           <span class="meta-item">
@@ -620,10 +278,10 @@
       </div>
 
       <div class="contact-actions">
-        <button class="btn-icon" onclick="openEdit('{{ contact.id }}')" title="Modifier">
+        <button class="btn-icon" onclick="openEdit('{{ contact.id }}')" title="Edit">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
-        <button class="btn-icon danger" onclick="confirmDelete('{{ contact.id }}', '{{ contact.name | e }}')" title="Supprimer">
+        <button class="btn-icon danger" onclick="confirmDelete('{{ contact.id }}', '{{ contact.name | e }}')" title="Delete">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
         </button>
       </div>
@@ -631,19 +289,19 @@
     {% else %}
     <div class="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <h3>Aucun contact</h3>
-      <p>Commencez par en ajouter un.</p>
+      <h3>No contacts yet</h3>
+      <p>Add your first contact to get started.</p>
     </div>
     {% endfor %}
   </div>
 </main>
 
-<!-- ── Contact modal ── -->
+<!-- Contact modal -->
 <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-header">
-      <span class="modal-title" id="modal-title-text">Nouveau contact</span>
-      <button class="modal-close" onclick="closeModal()" aria-label="Fermer">
+      <span class="modal-title" id="modal-title-text">New contact</span>
+      <button class="modal-close" onclick="closeModal()" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
@@ -654,60 +312,60 @@
 
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="first_name">Prénom</label>
-          <input class="form-input" type="text" id="first_name" name="first_name" required placeholder="Jean">
+          <label class="form-label" for="first_name">First name <span class="optional">(required)</span></label>
+          <input class="form-input" type="text" id="first_name" name="first_name" required placeholder="John">
         </div>
         <div class="form-group">
-          <label class="form-label" for="last_name">Nom</label>
-          <input class="form-input" type="text" id="last_name" name="last_name" required placeholder="Dupont">
+          <label class="form-label" for="last_name">Last name <span class="optional">(optional)</span></label>
+          <input class="form-input" type="text" id="last_name" name="last_name" placeholder="Doe">
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="organization">Organisation</label>
-        <input class="form-input" type="text" id="organization" name="organization" placeholder="Entreprise">
+        <label class="form-label" for="organization">Organization <span class="optional">(optional)</span></label>
+        <input class="form-input" type="text" id="organization" name="organization" placeholder="Company">
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="email">E-mail</label>
-          <input class="form-input" type="email" id="email" name="email" placeholder="jean@exemple.fr">
+          <label class="form-label" for="email">Email</label>
+          <input class="form-input" type="email" id="email" name="email" placeholder="john@example.com">
         </div>
         <div class="form-group">
-          <label class="form-label" for="phone">Téléphone</label>
-          <input class="form-input" type="tel" id="phone" name="phone" placeholder="+33 6 00 00 00 00">
+          <label class="form-label" for="phone">Phone</label>
+          <input class="form-input" type="tel" id="phone" name="phone" placeholder="+1 555 000 0000">
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="birthday">Date de naissance</label>
-          <input class="form-input" type="text" id="birthday" name="birthday" placeholder="jj/mm/aaaa">
+          <label class="form-label" for="birthday">Birthday <span class="optional">dd/mm/yyyy</span></label>
+          <input class="form-input" type="text" id="birthday" name="birthday" placeholder="31/12/1990">
         </div>
         <div class="form-group">
-          <label class="form-label" for="url">Site web</label>
+          <label class="form-label" for="url">Website</label>
           <input class="form-input" type="text" id="url" name="url" placeholder="https://…">
         </div>
       </div>
 
-      <div class="section-label">Adresse</div>
+      <div class="section-label">Address</div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="street">Rue</label>
-          <input class="form-input" type="text" id="street" name="street" placeholder="1 rue de la Paix">
+          <label class="form-label" for="street">Street</label>
+          <input class="form-input" type="text" id="street" name="street" placeholder="1 Main St">
         </div>
         <div class="form-group">
-          <label class="form-label" for="city">Ville</label>
+          <label class="form-label" for="city">City</label>
           <input class="form-input" type="text" id="city" name="city" placeholder="Paris">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="postal">Code postal</label>
+          <label class="form-label" for="postal">Postal code</label>
           <input class="form-input" type="text" id="postal" name="postal" placeholder="75001">
         </div>
         <div class="form-group">
-          <label class="form-label" for="country">Pays</label>
+          <label class="form-label" for="country">Country</label>
           <input class="form-input" type="text" id="country" name="country" placeholder="France">
         </div>
       </div>
@@ -720,47 +378,52 @@
             <div id="photo-placeholder" class="photo-preview-placeholder">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <img id="photo-preview" class="photo-preview-img" alt="Aperçu photo">
+            <img id="photo-preview" class="photo-preview-img" alt="Photo preview">
             <input class="form-input" type="file" id="photo" name="photo" accept="image/jpeg,image/png" style="flex:1">
           </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="note">Notes</label>
-          <textarea class="form-textarea" id="note" name="note" placeholder="Informations complémentaires…"></textarea>
+          <textarea class="form-textarea" id="note" name="note" placeholder="Additional information…"></textarea>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
-        <button type="submit" class="btn-save">Enregistrer</button>
+        <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn-save">Save</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- ── Delete confirm ── -->
+<!-- Delete confirm -->
 <div id="confirm-overlay" class="confirm-overlay">
   <div class="confirm-box">
-    <h3>Supprimer le contact ?</h3>
+    <h3>Delete contact?</h3>
     <p id="confirm-name"></p>
     <div class="confirm-actions">
-      <button class="btn-cancel" onclick="closeConfirm()">Annuler</button>
-      <button class="btn-confirm-del" onclick="doDelete()">Supprimer</button>
+      <button class="btn-cancel" onclick="closeConfirm()">Cancel</button>
+      <button class="btn-confirm-del" onclick="doDelete()">Delete</button>
     </div>
   </div>
 </div>
 
-<!-- Hidden delete forms injected dynamically -->
 <div id="delete-forms"></div>
 
 <script>
 const TOTAL = {{ contacts|length }};
 let pendingDeleteId = null;
 
-// ── Search / filter ──
+// Sort — navigate with query param (server-side sort)
+function applySort(value) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('sort', value);
+  window.location.href = url.toString();
+}
+
+// Search
 const searchInput = document.getElementById('search');
 const counter = document.getElementById('counter');
-
 searchInput.addEventListener('input', function() {
   const q = this.value.toLowerCase();
   const items = document.querySelectorAll('#contact-list .contact-item');
@@ -781,9 +444,9 @@ searchInput.addEventListener('input', function() {
     : `${TOTAL} contact${TOTAL !== 1 ? 's' : ''}`;
 });
 
-// ── Modal open/close ──
+// Modal
 function openNew() {
-  document.getElementById('modal-title-text').textContent = 'Nouveau contact';
+  document.getElementById('modal-title-text').textContent = 'New contact';
   document.getElementById('contact-form').reset();
   document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
   document.getElementById('contact-id').value = '';
@@ -795,65 +458,46 @@ function openNew() {
 function openEdit(contactId) {
   const row = document.querySelector(`[data-contact-id="${contactId}"]`);
   if (!row) return;
-
-  document.getElementById('modal-title-text').textContent = 'Modifier le contact';
+  document.getElementById('modal-title-text').textContent = 'Edit contact';
   document.getElementById('contact-form').action = "{{ url_for('update_contact') }}";
   document.getElementById('contact-id').value = contactId;
-
   const map = {
-    first_name: 'firstName', last_name: 'lastName',
-    email: 'email', phone: 'phone', organization: 'organization',
-    url: 'url', birthday: 'birthday', street: 'street',
-    city: 'city', postal: 'postal', country: 'country', note: 'note'
+    first_name:'firstName', last_name:'lastName', email:'email', phone:'phone',
+    organization:'organization', url:'url', birthday:'birthday',
+    street:'street', city:'city', postal:'postal', country:'country', note:'note'
   };
   Object.entries(map).forEach(([id, key]) => {
     const el = document.getElementById(id);
     if (el) el.value = row.dataset[key] || '';
   });
-
-  // Show existing photo if any
   resetPhotoPreview();
   if (row.dataset.hasPhoto === '1') {
     const img = row.querySelector('img.avatar');
     if (img) {
-      const preview = document.getElementById('photo-preview');
-      preview.src = img.src;
-      preview.style.display = 'block';
+      document.getElementById('photo-preview').src = img.src;
+      document.getElementById('photo-preview').style.display = 'block';
       document.getElementById('photo-placeholder').style.display = 'none';
     }
   }
-
   document.getElementById('modal-overlay').classList.add('open');
   document.getElementById('first_name').focus();
 }
 
-function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('open');
-}
-
-// Close on overlay click
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
 document.getElementById('modal-overlay').addEventListener('click', closeModal);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeConfirm(); } });
 
-// Close on Escape
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeConfirm(); }
-});
-
-// Photo preview
 document.getElementById('photo').addEventListener('change', function() {
   const file = this.files[0];
   if (file && file.type.startsWith('image/')) {
     const reader = new FileReader();
     reader.onload = e => {
-      const preview = document.getElementById('photo-preview');
-      preview.src = e.target.result;
-      preview.style.display = 'block';
+      document.getElementById('photo-preview').src = e.target.result;
+      document.getElementById('photo-preview').style.display = 'block';
       document.getElementById('photo-placeholder').style.display = 'none';
     };
     reader.readAsDataURL(file);
-  } else {
-    resetPhotoPreview();
-  }
+  } else { resetPhotoPreview(); }
 });
 
 function resetPhotoPreview() {
@@ -862,28 +506,20 @@ function resetPhotoPreview() {
   document.getElementById('photo-placeholder').style.display = 'flex';
 }
 
-// ── Delete confirm ──
+// Delete confirm
 function confirmDelete(id, name) {
   pendingDeleteId = id;
-  document.getElementById('confirm-name').textContent =
-    `${name} sera définitivement supprimé.`;
+  document.getElementById('confirm-name').textContent = `${name} will be permanently deleted.`;
   document.getElementById('confirm-overlay').classList.add('open');
 }
-
-function closeConfirm() {
-  pendingDeleteId = null;
-  document.getElementById('confirm-overlay').classList.remove('open');
-}
-
+function closeConfirm() { pendingDeleteId = null; document.getElementById('confirm-overlay').classList.remove('open'); }
 function doDelete() {
   if (!pendingDeleteId) return;
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = `/contacts/${pendingDeleteId}/delete`;
   const csrf = document.createElement('input');
-  csrf.type = 'hidden';
-  csrf.name = 'csrf_token';
-  csrf.value = "{{ csrf_token() }}";
+  csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = "{{ csrf_token() }}";
   form.appendChild(csrf);
   document.getElementById('delete-forms').appendChild(form);
   form.submit();

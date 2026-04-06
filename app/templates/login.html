@@ -1,181 +1,83 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='media/guivcard-icon.ico') }}">
-  <title>GUIVCard — Connexion</title>
+  <title>GUIVCard — Sign in</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg: #0f1117;
-      --surface: #181c27;
-      --border: #2a2f3e;
-      --accent: #6c9fff;
-      --accent-dim: rgba(108,159,255,.12);
-      --text: #e8eaf0;
-      --muted: #8892a4;
-      --error: #ff6b6b;
-      --success: #6bcb77;
+      --bg: #0f1117; --surface: #181c27; --border: #2a2f3e;
+      --accent: #6c9fff; --accent-dim: rgba(108,159,255,.12);
+      --text: #e8eaf0; --muted: #8892a4;
+      --error: #ff6b6b; --success: #6bcb77;
     }
-
     body {
       font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex;
+      align-items: center; justify-content: center; overflow: hidden;
     }
-
-    /* Animated background orbs */
     body::before, body::after {
-      content: '';
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(80px);
-      opacity: .25;
-      pointer-events: none;
+      content: ''; position: fixed; border-radius: 50%;
+      filter: blur(80px); opacity: .22; pointer-events: none;
     }
-    body::before {
-      width: 500px; height: 500px;
-      background: #3b5bdb;
-      top: -150px; left: -150px;
-      animation: drift 12s ease-in-out infinite alternate;
-    }
-    body::after {
-      width: 400px; height: 400px;
-      background: #1971c2;
-      bottom: -100px; right: -100px;
-      animation: drift 15s ease-in-out infinite alternate-reverse;
-    }
-
-    @keyframes drift {
-      from { transform: translate(0,0) scale(1); }
-      to   { transform: translate(40px,30px) scale(1.08); }
-    }
+    body::before { width:500px; height:500px; background:#3b5bdb; top:-150px; left:-150px; animation: drift 12s ease-in-out infinite alternate; }
+    body::after  { width:400px; height:400px; background:#1971c2; bottom:-100px; right:-100px; animation: drift 15s ease-in-out infinite alternate-reverse; }
+    @keyframes drift { from{transform:translate(0,0) scale(1)} to{transform:translate(40px,30px) scale(1.08)} }
 
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 48px 44px;
-      width: 100%;
-      max-width: 400px;
-      position: relative;
-      z-index: 1;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 44px 40px;
+      width: 100%; max-width: 400px;
+      position: relative; z-index: 1;
       box-shadow: 0 32px 80px rgba(0,0,0,.5);
-      animation: appear .4s ease both;
+      animation: appear .35s ease both;
     }
+    @keyframes appear { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
 
-    @keyframes appear {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+    .logo-area { text-align: center; margin-bottom: 32px; }
+    .logo-area h1 { font-family:'DM Serif Display',serif; font-size:2rem; letter-spacing:-.5px; }
+    .logo-area p  { color:var(--muted); font-size:.85rem; margin-top:6px; font-weight:300; }
 
-    .logo-area {
-      text-align: center;
-      margin-bottom: 36px;
-    }
+    .alert { padding:10px 14px; border-radius:9px; font-size:.84rem; margin-bottom:18px; }
+    .alert.error   { background:rgba(255,107,107,.1); border:1px solid rgba(255,107,107,.28); color:var(--error); }
+    .alert.success { background:rgba(107,203,119,.1); border:1px solid rgba(107,203,119,.28); color:var(--success); }
 
-    .logo-area h1 {
-      font-family: 'DM Serif Display', serif;
-      font-size: 2rem;
-      letter-spacing: -.5px;
-      color: var(--text);
-    }
-
-    .logo-area p {
-      color: var(--muted);
-      font-size: .875rem;
-      margin-top: 6px;
-      font-weight: 300;
-    }
-
-    .alert {
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: .85rem;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-    }
-    .alert.error   { background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.3); color: var(--error); }
-    .alert.success { background: rgba(107,203,119,.1); border: 1px solid rgba(107,203,119,.3); color: var(--success); }
-
-    .field { margin-bottom: 20px; }
-
+    .field { margin-bottom:16px; }
     label {
-      display: block;
-      font-size: .8rem;
-      font-weight: 500;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      margin-bottom: 8px;
+      display:block; font-size:.75rem; font-weight:500; color:var(--muted);
+      text-transform:uppercase; letter-spacing:.08em; margin-bottom:7px;
     }
-
-    input[type="text"],
-    input[type="password"] {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 16px;
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      font-size: .95rem;
-      transition: border-color .2s, box-shadow .2s;
-      outline: none;
+    input[type="text"], input[type="password"] {
+      width:100%; background:var(--bg); border:1px solid var(--border);
+      border-radius:9px; padding:11px 14px; color:var(--text);
+      font-family:'DM Sans',sans-serif; font-size:.9rem; outline:none;
+      transition:border-color .2s, box-shadow .2s;
     }
-
-    input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-dim);
-    }
+    input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+    input::placeholder { color:#3d4457; }
 
     .btn-primary {
-      width: 100%;
-      margin-top: 8px;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 13px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: .95rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity .2s, transform .1s;
-      letter-spacing: .02em;
+      width:100%; margin-top:10px; background:var(--accent); color:#fff; border:none;
+      border-radius:9px; padding:13px; font-family:'DM Sans',sans-serif;
+      font-size:.92rem; font-weight:500; cursor:pointer;
+      transition:opacity .2s, transform .1s;
     }
-    .btn-primary:hover   { opacity: .88; }
-    .btn-primary:active  { transform: scale(.985); }
+    .btn-primary:hover  { opacity:.88; }
+    .btn-primary:active { transform:scale(.985); }
 
-    .carddav-note {
-      margin-top: 24px;
-      text-align: center;
-      font-size: .78rem;
-      color: var(--muted);
-    }
-    .carddav-note svg {
-      vertical-align: middle;
-      margin-right: 4px;
-      opacity: .6;
-    }
+    .footer-note { margin-top:22px; text-align:center; font-size:.76rem; color:var(--muted); opacity:.65; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo-area">
       <h1>GUIVCard</h1>
-      <p>Connexion avec vos identifiants CardDAV</p>
+      <p>Sign in with your CardDAV credentials</p>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -187,20 +89,17 @@
     <form method="POST" action="{{ url_for('login') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
-        <label for="username">Identifiant</label>
+        <label for="username">Username</label>
         <input type="text" id="username" name="username" required autocomplete="username" autofocus>
       </div>
       <div class="field">
-        <label for="password">Mot de passe</label>
+        <label for="password">Password</label>
         <input type="password" id="password" name="password" required autocomplete="current-password">
       </div>
-      <button type="submit" class="btn-primary">Se connecter</button>
+      <button type="submit" class="btn-primary">Sign in</button>
     </form>
 
-    <p class="carddav-note">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Authentification via le serveur Radicale
-    </p>
+    <p class="footer-note">Authentication verified directly against the Radicale server</p>
   </div>
 </body>
 </html>
