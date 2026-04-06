@@ -318,24 +318,29 @@ def parse_contacts_from_report(response_content: bytes) -> list:
     return contacts
 
 
+def _sort_key(value: str) -> tuple:
+    """Return (0, normalized) for non-empty values, (1, '') for empty.
+    This pushes blank fields to the end instead of the beginning."""
+    v = (value or '').strip().lower()
+    return (0, v) if v else (1, '')
+
+
 def sort_contacts(contacts: list, sort_by: str = 'first_name') -> list:
-    """Sort contacts by the given key. Default: first_name then last_name."""
+    """Sort contacts. Empty fields are always pushed to the end."""
     if sort_by == 'last_name':
         key = lambda c: (
-            (c['last_name'] or c['name']).strip().lower(),
-            (c['first_name'] or '').strip().lower()
+            _sort_key(c['last_name'] or c['name']),
+            _sort_key(c['first_name']),
         )
     elif sort_by == 'org':
         key = lambda c: (
-            (c['org'] or '').strip().lower(),
-            (c['first_name'] or c['name']).strip().lower()
+            _sort_key(c['org']),
+            _sort_key(c['first_name'] or c['name']),
         )
-    elif sort_by == 'email':
-        key = lambda c: (c['email'] or '').strip().lower()
     else:  # first_name (default)
         key = lambda c: (
-            (c['first_name'] or c['name']).strip().lower(),
-            (c['last_name'] or '').strip().lower()
+            _sort_key(c['first_name'] or c['name']),
+            _sort_key(c['last_name']),
         )
     try:
         return sorted(contacts, key=key)
@@ -458,7 +463,7 @@ def contacts():
     # Sort preference: query string > session > default
     # Read before POST handling so redirect preserves it
     sort_by = request.args.get('sort') or session.get('sort_by', 'first_name')
-    valid_sorts = {'first_name', 'last_name', 'org', 'email'}
+    valid_sorts = {'first_name', 'last_name', 'org'}
     if sort_by not in valid_sorts:
         sort_by = 'first_name'
     session['sort_by'] = sort_by
