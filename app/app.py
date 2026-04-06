@@ -270,7 +270,12 @@ def parse_contacts_from_report(response_content: bytes) -> list:
         try:
             if 'org' in vcard_data.contents:
                 val = vcard_data.org.value
-                contact['org'] = val[0] if isinstance(val, list) else val
+                # vobject encodes ORG as list-of-lists e.g. [['Acme','Dept']]
+                if isinstance(val, list):
+                    val = val[0] if val else ''
+                if isinstance(val, list):
+                    val = val[0] if val else ''
+                contact['org'] = str(val) if val else ''
         except Exception:
             pass
 
@@ -318,10 +323,20 @@ def parse_contacts_from_report(response_content: bytes) -> list:
     return contacts
 
 
-def _sort_key(value: str) -> tuple:
+def _as_str(value) -> str:
+    """Flatten any value (str, list, None) to a plain string."""
+    if value is None:
+        return ''
+    if isinstance(value, list):
+        flat = value[0] if value else ''
+        return _as_str(flat)
+    return str(value)
+
+
+def _sort_key(value) -> tuple:
     """Return (0, normalized) for non-empty values, (1, '') for empty.
-    This pushes blank fields to the end instead of the beginning."""
-    v = (value or '').strip().lower()
+    Pushes blank fields to the end. Accepts str, list, or None."""
+    v = _as_str(value).strip().lower()
     return (0, v) if v else (1, '')
 
 
