@@ -4,22 +4,23 @@ services:
     ports:
       - "8190:5000"
     environment:
-      - FLASK_ENV=development
-      - CARDDAV_URL=https://your.carddav-server.com/user/contacts/
-      - ADMIN_USERNAME=${ADMIN_USERNAME}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      # Clé secrète Flask — générer avec : python3 -c "import secrets; print(secrets.token_hex(32))"
+      - SECRET_KEY=${SECRET_KEY}
+      # URL CardDAV avec placeholder {username} pour le multi-utilisateurs :
+      #   http://radicale:5232/{username}/contacts/
+      # Ou une collection fixe (mono-utilisateur) :
+      #   http://radicale:5232/admin/contacts/
+      - CARDDAV_URL=${CARDDAV_URL}
     healthcheck:
-      test: ["CMD", "curl", "-f", "-u", "${ADMIN_USERNAME}:${ADMIN_PASSWORD}", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
       interval: 30s
       timeout: 10s
       retries: 3
     restart: unless-stopped
 
-# Configuration Instructions:
-# 1. Set CARDDAV_URL to your CardDAV server URL (must end with a trailing slash)
-# 2. Update ADMIN_USERNAME and ADMIN_PASSWORD with your CardDAV credentials
+# Configuration (.env) :
+#   SECRET_KEY=<valeur générée>
+#   CARDDAV_URL=http://radicale:5232/{username}/contacts/
 #
-# Example configuration for local Radicale server:
-# CARDDAV_URL=http://radicale:5232/user/contacts/
-# ADMIN_USERNAME=admin
-# ADMIN_PASSWORD=password
+# L'authentification est vérifiée directement auprès de Radicale.
+# Chaque utilisateur voit uniquement sa propre collection.

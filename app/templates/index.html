@@ -1,346 +1,893 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='media/guivcard-icon.ico') }}">
-    <title>GUIVCard - Contacts</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='media/guivcard-icon.ico') }}">
+  <title>GUIVCard — Contacts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #181c27;
+      --surface2:  #1e2333;
+      --border:    #252b3b;
+      --border2:   #2f3749;
+      --accent:    #6c9fff;
+      --accent2:   #4c7fe0;
+      --accent-dim: rgba(108,159,255,.1);
+      --text:      #e8eaf0;
+      --muted:     #8892a4;
+      --muted2:    #606878;
+      --danger:    #ff6b6b;
+      --danger-dim: rgba(255,107,107,.12);
+      --success:   #6bcb77;
+      --success-dim: rgba(107,203,119,.12);
+      --warn-dim:  rgba(255,193,68,.12);
+      --warn:      #ffc144;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(24,28,39,.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.25rem;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .nav-brand .dot {
+      width: 8px; height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-user {
+      font-size: .8rem;
+      color: var(--muted);
+      padding: 4px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .nav-link {
+      font-size: .82rem;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all .15s;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface2); border-color: var(--border); }
+
+    /* ── Flash messages ── */
+    .flash-area {
+      max-width: 860px;
+      margin: 16px auto 0;
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .flash {
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: .875rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slideDown .25s ease;
+    }
+    .flash.success { background: var(--success-dim); border: 1px solid rgba(107,203,119,.25); color: var(--success); }
+    .flash.error   { background: var(--danger-dim);  border: 1px solid rgba(255,107,107,.25); color: var(--danger); }
+    .flash.message { background: var(--warn-dim);    border: 1px solid rgba(255,193,68,.25);  color: var(--warn); }
+
+    @keyframes slideDown {
+      from { opacity:0; transform: translateY(-6px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search-wrap {
+      flex: 1;
+      min-width: 200px;
+      position: relative;
+    }
+    .search-wrap svg {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted2);
+      pointer-events: none;
+    }
+    #search {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px 10px 38px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #search::placeholder { color: var(--muted2); }
+    #search:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .counter {
+      font-size: .8rem;
+      color: var(--muted);
+      white-space: nowrap;
+      min-width: 80px;
+      text-align: right;
+    }
+
+    .btn-new {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity .2s, transform .1s;
+      white-space: nowrap;
+    }
+    .btn-new:hover  { opacity: .88; }
+    .btn-new:active { transform: scale(.97); }
+
+    /* ── Contact list ── */
+    .contact-list {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .contact-item:last-child { border-bottom: none; }
+    .contact-item:hover { background: var(--surface2); }
+
+    /* Avatar */
+    .avatar {
+      flex-shrink: 0;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--border2);
+    }
+
+    .avatar-initials {
+      flex-shrink: 0;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 2px solid var(--border2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'DM Serif Display', serif;
+      font-size: 1rem;
+      color: var(--accent);
+      user-select: none;
+    }
+
+    .contact-info { flex: 1; min-width: 0; }
+
+    .contact-name {
+      font-size: .95rem;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .contact-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      margin-top: 4px;
+    }
+
+    .meta-item {
+      font-size: .78rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 240px;
+    }
+    .meta-item svg { flex-shrink: 0; opacity: .5; }
+    .meta-item a { color: var(--accent); text-decoration: none; }
+    .meta-item a:hover { text-decoration: underline; }
+
+    .contact-org {
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* Action buttons */
+    .contact-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .btn-icon {
+      width: 34px; height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      cursor: pointer;
+      transition: all .15s;
+      color: var(--muted);
+    }
+    .btn-icon:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+    .btn-icon.danger:hover { background: var(--danger-dim); color: var(--danger); border-color: rgba(255,107,107,.3); }
+
+    /* Empty state */
+    .empty-state {
+      padding: 60px 24px;
+      text-align: center;
+    }
+    .empty-state svg { color: var(--muted2); margin-bottom: 16px; }
+    .empty-state h3 { color: var(--muted); font-size: 1rem; font-weight: 400; }
+    .empty-state p  { color: var(--muted2); font-size: .82rem; margin-top: 6px; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 16px;
+    }
+    .modal-overlay.open {
+      display: flex;
+      animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 560px;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 32px;
+      box-shadow: 0 32px 80px rgba(0,0,0,.6);
+      animation: popIn .22s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes popIn {
+      from { opacity:0; transform: scale(.94); }
+      to   { opacity:1; transform: scale(1); }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .modal-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.3rem;
+    }
+    .modal-close {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+    }
+    .modal-close:hover { background: var(--surface2); color: var(--text); }
+
+    /* Form inside modal */
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .form-row.single { grid-template-columns: 1fr; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+
+    .form-label {
+      font-size: .75rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .form-input,
+    .form-textarea {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 9px;
+      padding: 10px 13px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      width: 100%;
+    }
+    .form-input:focus, .form-textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--muted2); }
+    .form-textarea { resize: vertical; min-height: 72px; }
+
+    .form-hint {
+      font-size: .72rem;
+      color: var(--muted2);
+      margin-top: 2px;
+    }
+
+    .section-label {
+      font-size: .72rem;
+      font-weight: 600;
+      color: var(--muted2);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin: 20px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Photo preview */
+    .photo-zone {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .photo-preview-img {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--border2);
+      display: none;
+    }
+    .photo-preview-placeholder {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 2px dashed var(--border2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted2);
+    }
+
+    /* Modal footer */
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn-cancel {
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 9px;
+      padding: 10px 20px;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: .875rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-cancel:hover { background: var(--surface2); color: var(--text); }
+
+    .btn-save {
+      background: var(--accent);
+      border: none;
+      border-radius: 9px;
+      padding: 10px 24px;
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn-save:hover  { opacity: .88; }
+    .btn-save:active { transform: scale(.97); }
+
+    /* ── Delete confirm dialog ── */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+    }
+    .confirm-overlay.open { display: flex; }
+    .confirm-box {
+      background: var(--surface);
+      border: 1px solid rgba(255,107,107,.3);
+      border-radius: 14px;
+      padding: 28px;
+      max-width: 360px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+    .confirm-box h3 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; margin-bottom: 10px; }
+    .confirm-box p  { font-size: .85rem; color: var(--muted); margin-bottom: 24px; }
+    .confirm-actions { display: flex; gap: 10px; justify-content: center; }
+    .btn-confirm-del {
+      background: var(--danger);
+      border: none;
+      border-radius: 9px;
+      padding: 10px 22px;
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .btn-confirm-del:hover { opacity: .85; }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <nav class="bg-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <span class="text-gray-800 font-bold text-xl">GUIVCard</span>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="{{ url_for('health_check') }}" class="text-gray-600 hover:text-gray-900">Health Status</a>
-                    <a href="{{ url_for('logout') }}" class="text-gray-600 hover:text-gray-900">Logout</a>
-                </div>
-            </div>
+<body>
+
+<nav>
+  <a class="nav-brand" href="{{ url_for('contacts') }}">
+    <span class="dot"></span> GUIVCard
+  </a>
+  <div class="nav-right">
+    <span class="nav-user">{{ session.username }}</span>
+    <a class="nav-link" href="{{ url_for('health_check') }}">Statut</a>
+    <a class="nav-link" href="{{ url_for('logout') }}">Déconnexion</a>
+  </div>
+</nav>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flash-area">
+    {% for category, message in messages %}
+    <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endwith %}
+
+<main>
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search" type="text" placeholder="Rechercher un contact…" aria-label="Rechercher un contact">
+    </div>
+    <span class="counter" id="counter">{{ contacts|length }} contact{{ 's' if contacts|length != 1 }}</span>
+    <button class="btn-new" onclick="openNew()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nouveau
+    </button>
+  </div>
+
+  <div class="contact-list" id="contact-list">
+    {% for contact in contacts %}
+    <div class="contact-item"
+      data-contact-id="{{ contact.id }}"
+      data-name="{{ contact.name | e }}"
+      data-first-name="{{ contact.first_name | e }}"
+      data-last-name="{{ contact.last_name | e }}"
+      data-email="{{ contact.email | e }}"
+      data-phone="{{ contact.phone | e }}"
+      data-organization="{{ contact.org | e }}"
+      data-url="{{ contact.url | e }}"
+      data-birthday="{{ contact.birthday | e }}"
+      data-street="{{ contact.address.street | e if contact.address else '' }}"
+      data-city="{{ contact.address.city | e if contact.address else '' }}"
+      data-postal="{{ contact.address.postal | e if contact.address else '' }}"
+      data-country="{{ contact.address.country | e if contact.address else '' }}"
+      data-has-photo="{{ '1' if contact.photo else '0' }}">
+
+      {% if contact.photo %}
+      <img class="avatar"
+           src="data:image/jpeg;base64,{{ contact.photo }}"
+           alt="{{ contact.name | e }}">
+      {% else %}
+      <div class="avatar-initials">
+        {{ (contact.first_name[:1] or contact.name[:1] or '?') | upper }}
+      </div>
+      {% endif %}
+
+      <div class="contact-info">
+        <div class="contact-name">{{ contact.name }}</div>
+        {% if contact.org %}
+        <div class="contact-org">{{ contact.org }}</div>
+        {% endif %}
+        <div class="contact-meta">
+          {% if contact.email %}
+          <span class="meta-item">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>
+          </span>
+          {% endif %}
+          {% if contact.phone %}
+          <span class="meta-item">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.9v2.02z"/></svg>
+            {{ contact.phone }}
+          </span>
+          {% endif %}
+          {% if contact.birthday %}
+          <span class="meta-item">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {{ contact.birthday }}
+          </span>
+          {% endif %}
+          {% if contact.address and (contact.address.city or contact.address.street) %}
+          <span class="meta-item">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            {{ contact.address.city }}{% if contact.address.street %}, {{ contact.address.street }}{% endif %}
+          </span>
+          {% endif %}
         </div>
-    </nav>
+      </div>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="mb-4 p-4 bg-yellow-100 text-yellow-700 rounded">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+      <div class="contact-actions">
+        <button class="btn-icon" onclick="openEdit('{{ contact.id }}')" title="Modifier">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon danger" onclick="confirmDelete('{{ contact.id }}', '{{ contact.name | e }}')" title="Supprimer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+        </button>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <h3>Aucun contact</h3>
+      <p>Commencez par en ajouter un.</p>
+    </div>
+    {% endfor %}
+  </div>
+</main>
 
-        <div class="px-4 py-6 sm:px-0">
-            <div class="flex justify-between items-center mb-6">
-                <h1 class="text-2xl font-bold text-gray-900">Contacts</h1>
-                <button onclick="showNewContactModal()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
-                    New Contact
-                </button>
-            </div>
-<!-- 🔍 Ajout dans le <main> au-dessus de la liste -->
-<div class="mb-4">
-    <input id="search" type="text" placeholder="Search contacts..." class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm" />
-</div>
-
-<div class="bg-white shadow overflow-hidden sm:rounded-md">
-            <div class="bg-white shadow overflow-hidden sm:rounded-md">
-                <ul class="divide-y divide-gray-200" id="contact-list">
-                    {% for contact in contacts %}
-                    <li class="px-6 py-4 flex items-center justify-between"
-                        data-contact-id="{{ contact.id }}"
-                        data-name="{{ contact.name }}"
-                        data-first-name="{{ contact.first_name }}"
-                        data-last-name="{{ contact.last_name }}"
-                        data-email="{{ contact.email }}"
-                        data-phone="{{ contact.phone }}"
-                        data-organization="{{ contact.org }}"
-                        data-url="{{ contact.url }}"
-                        data-birthday="{{ contact.birthday }}"
-                        data-street="{{ contact.address.street if contact.address else '' }}"
-                        data-city="{{ contact.address.city if contact.address else '' }}"
-                        data-postal="{{ contact.address.postal if contact.address else '' }}"
-                        data-country="{{ contact.address.country if contact.address else '' }}"
-                        data-note="{{ contact.note }}">
-                        <div class="flex-grow">
-                            <div class="flex items-center space-x-2">
-                                {% if contact.photo %}
-                                <img src="data:image/jpeg;base64,{{ contact.photo }}"
-                                     class="w-10 h-10 rounded-full object-cover"
-                                     alt="{{ contact.name }}">
-                                {% endif %}
-                                <div>
-                                    <h3 class="text-lg font-medium text-gray-900">{{ contact.name }}</h3>
-                                    {% if contact.org %}
-                                    <p class="text-sm text-gray-600">{{ contact.org }}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="mt-2 space-y-1">
-                                <p class="text-sm text-gray-500">
-                                    <a href="mailto:{{ contact.email }}" class="text-blue-500 hover:text-blue-700">{{ contact.email }}</a>
-                                </p>
-                                {% if contact.phone %}
-                            <p class="text-sm text-gray-500">{{ contact.phone }}</p>
-                                {% endif %}
-                                {% if contact.url %}
-                                <p class="text-sm text-blue-500">
-                                    <a href="{{ contact.url }}" target="_blank" rel="noopener noreferrer">
-                                        {{ contact.url }}
-                                    </a>
-                                </p>
-                                {% endif %}
-                                {% if contact.address and (contact.address.street or contact.address.postal or contact.address.city or contact.address.country) %}
-                                <p class="text-sm text-gray-500">
-                                    {{ contact.address.street }}{% if contact.address.postal %}, {{ contact.address.postal }}{% endif %}{% if contact.address.city %}, {{ contact.address.city }}{% endif %}{% if contact.address.country %}, {{ contact.address.country }}{% endif %}
-                                </p>
-                                {% endif %}
-                                {% if contact.birthday %}
-                                <p class="text-sm text-gray-500">Birthday: {{ contact.birthday.replace('-', '/') if contact.birthday and '-' in contact.birthday else contact.birthday }}</p>
-                                {% endif %}
-                                {% if contact.note %}
-                                <p class="text-sm text-gray-400 mt-1 italic">{{ contact.note }}</p>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="flex space-x-2">
-                            <button onclick="editContact('{{ contact.id }}')" class="text-blue-600 hover:text-blue-800">
-                                Edit
-                            </button>
-                            <button onclick="deleteContact('{{ contact.id }}')" class="text-red-600 hover:text-red-800">
-                                Delete
-                            </button>
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </main>
-
-    <!-- Contact Modal Template -->
-    <div id="contact-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden flex items-center justify-center">
-        <div class="bg-white rounded-lg p-8 max-w-2xl w-full">
-            <h2 id="modal-title" class="text-xl font-bold mb-4">New Contact</h2>
-            <form id="contact-form" method="POST" action="{{ url_for('contacts') }}"
-                  class="space-y-4" enctype="multipart/form-data">
-                <input type="hidden" id="contact-id" name="contact_id">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="first_name" class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                        <input type="text" id="first_name" name="first_name" required placeholder="John"
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                    <div>
-                        <label for="last_name" class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                        <input type="text" id="last_name" name="last_name" required placeholder="Doe"
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                </div>
-                
-                <div>
-                    <label for="organization" class="block text-sm font-medium text-gray-700">Organization</label>
-                    <input type="text" id="organization" name="organization" placeholder="Company"
-                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-                        <input type="email" id="email" name="email" placeholder="john@example.com"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                    <div>
-                        <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
-                        <input type="tel" id="phone" name="phone" placeholder="+1234567890"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label for="url" class="block text-sm font-medium text-gray-700">Website</label>
-                    <input type="text" id="url" name="url" placeholder="www.example.com"
-                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    <p class="mt-1 text-xs text-gray-500">Optional. Enter website address exactly as you want it stored.</p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="birthday" class="block text-sm font-medium text-gray-700">Birthday</label>
-                        <input type="text" id="birthday" name="birthday" placeholder="dd/mm/yyyy"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                    <div>
-                        <label for="photo" class="block text-sm font-medium text-gray-700">Photo</label>
-                        <input type="file" id="photo" name="photo" accept="image/jpeg,image/png"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                </div>
-
-                <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700">Address</label>
-                    <div class="grid grid-cols-2 gap-4">
-                        <input type="text" id="street" name="street" placeholder="Street"
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        <input type="text" id="city" name="city" placeholder="City"
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <input type="text" id="postal" name="postal" placeholder="Postal Code"
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        <input type="text" id="country" name="country" placeholder="Country"
-                               class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label for="note" class="block text-sm font-medium text-gray-700">Notes</label>
-                    <textarea id="note" name="note" rows="2" placeholder="Additional information..."
-                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></textarea>
-                </div>
-                <div class="flex justify-end space-x-3">
-                    <button type="button" onclick="hideContactModal()"
-                            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                        Cancel
-                    </button>
-                    <button type="submit"
-                            class="px-4 py-2 border border-transparent rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
-                        Save
-                    </button>
-                </div>
-            </form>
-        </div>
+<!-- ── Contact modal ── -->
+<div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title-text">Nouveau contact</span>
+      <button class="modal-close" onclick="closeModal()" aria-label="Fermer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
 
-    <script>
-        function showNewContactModal() {
-            // Reset form and title
-            document.getElementById('modal-title').textContent = 'New Contact';
-            document.getElementById('contact-form').reset();
-            
-            // Reset hidden fields and action
-            document.getElementById('contact-id').value = '';
-            document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
-            
-            // Remove any preview images
-            const preview = document.getElementById('photo-preview');
-            if (preview) preview.remove();
-            
-            // Show modal
-            document.getElementById('contact-modal').classList.remove('hidden');
-        }
+    <form id="contact-form" method="POST" action="{{ url_for('contacts') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" id="contact-id" name="contact_id">
 
-        function hideContactModal() {
-            document.getElementById('contact-modal').classList.add('hidden');
-        }
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="first_name">Prénom</label>
+          <input class="form-input" type="text" id="first_name" name="first_name" required placeholder="Jean">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="last_name">Nom</label>
+          <input class="form-input" type="text" id="last_name" name="last_name" required placeholder="Dupont">
+        </div>
+      </div>
 
-        function editContact(contactId) {
-            document.getElementById('modal-title').textContent = 'Edit Contact';
-            const row = document.querySelector(`[data-contact-id="${contactId}"]`);
-            document.getElementById('contact-id').value = contactId;
+      <div class="form-group">
+        <label class="form-label" for="organization">Organisation</label>
+        <input class="form-input" type="text" id="organization" name="organization" placeholder="Entreprise">
+      </div>
 
-            // Fill all form fields from data attributes
-            const fields = {
-                'first_name': row.dataset.firstName || '',
-                'last_name': row.dataset.lastName || '',
-                'email': row.dataset.email || '',
-                'phone': row.dataset.phone || '',
-                'organization': row.dataset.organization || '',
-                'url': row.dataset.url || '',
-                'birthday': row.dataset.birthday || '',
-                'street': row.dataset.street || '',
-                'city': row.dataset.city || '',
-                'postal': row.dataset.postal || '',
-                'country': row.dataset.country || '',
-                'note': row.dataset.note || ''
-            };
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="email">E-mail</label>
+          <input class="form-input" type="email" id="email" name="email" placeholder="jean@exemple.fr">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="phone">Téléphone</label>
+          <input class="form-input" type="tel" id="phone" name="phone" placeholder="+33 6 00 00 00 00">
+        </div>
+      </div>
 
-            // Update each form field
-            Object.entries(fields).forEach(([id, value]) => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.value = value;
-                }
-            });
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="birthday">Date de naissance</label>
+          <input class="form-input" type="text" id="birthday" name="birthday" placeholder="jj/mm/aaaa">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="url">Site web</label>
+          <input class="form-input" type="text" id="url" name="url" placeholder="https://…">
+        </div>
+      </div>
 
-            document.getElementById('contact-form').action = "{{ url_for('update_contact') }}";
-            document.getElementById('contact-modal').classList.remove('hidden');
-        }
+      <div class="section-label">Adresse</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="street">Rue</label>
+          <input class="form-input" type="text" id="street" name="street" placeholder="1 rue de la Paix">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="city">Ville</label>
+          <input class="form-input" type="text" id="city" name="city" placeholder="Paris">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="postal">Code postal</label>
+          <input class="form-input" type="text" id="postal" name="postal" placeholder="75001">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="country">Pays</label>
+          <input class="form-input" type="text" id="country" name="country" placeholder="France">
+        </div>
+      </div>
 
-        function deleteContact(contactId) {
-            if (confirm('Are you sure you want to delete this contact?')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = `/contacts/${contactId}/delete`;
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
+      <div class="section-label">Photo &amp; Notes</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="photo">Photo</label>
+          <div class="photo-zone">
+            <div id="photo-placeholder" class="photo-preview-placeholder">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <img id="photo-preview" class="photo-preview-img" alt="Aperçu photo">
+            <input class="form-input" type="file" id="photo" name="photo" accept="image/jpeg,image/png" style="flex:1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="note">Notes</label>
+          <textarea class="form-textarea" id="note" name="note" placeholder="Informations complémentaires…"></textarea>
+        </div>
+      </div>
 
-        // Close modal when clicking outside
-        document.getElementById('contact-modal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                hideContactModal();
-            }
-        });
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+        <button type="submit" class="btn-save">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
 
-        // Prevent closing when clicking inside the modal content
-        document.querySelector('.bg-white').addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
+<!-- ── Delete confirm ── -->
+<div id="confirm-overlay" class="confirm-overlay">
+  <div class="confirm-box">
+    <h3>Supprimer le contact ?</h3>
+    <p id="confirm-name"></p>
+    <div class="confirm-actions">
+      <button class="btn-cancel" onclick="closeConfirm()">Annuler</button>
+      <button class="btn-confirm-del" onclick="doDelete()">Supprimer</button>
+    </div>
+  </div>
+</div>
 
-        // Handle photo upload preview
-        document.getElementById('photo').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file && file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    let preview = document.getElementById('photo-preview');
-                    if (!preview) {
-                        preview = document.createElement('img');
-                        preview.id = 'photo-preview';
-                        preview.className = 'mt-2 w-20 h-20 rounded-full object-cover';
-                        document.getElementById('photo').parentNode.appendChild(preview);
-                    }
-                    preview.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-</script>
-<!-- 🧠 Script de filtrage dynamique -->
+<!-- Hidden delete forms injected dynamically -->
+<div id="delete-forms"></div>
+
 <script>
-document.getElementById('search').addEventListener('input', function(e) {
-    const query = e.target.value.toLowerCase();
-    const contacts = document.querySelectorAll('#contact-list > li');
+const TOTAL = {{ contacts|length }};
+let pendingDeleteId = null;
 
-    contacts.forEach(contact => {
-        const fn = contact.dataset.name?.toLowerCase() || '';
-        const n = contact.dataset.firstName?.toLowerCase() + ' ' + contact.dataset.lastName?.toLowerCase() || '';
-        const org = contact.dataset.organization?.toLowerCase() || '';
-        const email = contact.dataset.email?.toLowerCase() || '';
-        const tel = contact.dataset.phone?.toLowerCase() || '';
-        const adr = (contact.dataset.street?.toLowerCase() || '') + ' ' +
-                   (contact.dataset.city?.toLowerCase() || '') + ' ' +
-                   (contact.dataset.postal?.toLowerCase() || '') + ' ' +
-                   (contact.dataset.country?.toLowerCase() || '');
-        const url = contact.dataset.url?.toLowerCase() || '';
-        const note = contact.dataset.note?.toLowerCase() || '';
+// ── Search / filter ──
+const searchInput = document.getElementById('search');
+const counter = document.getElementById('counter');
 
-        const match = fn.includes(query) ||
-                     n.includes(query) ||
-                     org.includes(query) ||
-                     email.includes(query) ||
-                     tel.includes(query) ||
-                     adr.includes(query) ||
-                     url.includes(query) ||
-                     note.includes(query);
-        contact.style.display = match ? '' : 'none';
-    });
+searchInput.addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  const items = document.querySelectorAll('#contact-list .contact-item');
+  let visible = 0;
+  items.forEach(el => {
+    const hay = [
+      el.dataset.name, el.dataset.firstName, el.dataset.lastName,
+      el.dataset.email, el.dataset.phone, el.dataset.organization,
+      el.dataset.url, el.dataset.street, el.dataset.city,
+      el.dataset.postal, el.dataset.country
+    ].join(' ').toLowerCase();
+    const show = !q || hay.includes(q);
+    el.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  counter.textContent = q
+    ? `${visible} / ${TOTAL} contact${TOTAL !== 1 ? 's' : ''}`
+    : `${TOTAL} contact${TOTAL !== 1 ? 's' : ''}`;
 });
+
+// ── Modal open/close ──
+function openNew() {
+  document.getElementById('modal-title-text').textContent = 'Nouveau contact';
+  document.getElementById('contact-form').reset();
+  document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
+  document.getElementById('contact-id').value = '';
+  resetPhotoPreview();
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('first_name').focus();
+}
+
+function openEdit(contactId) {
+  const row = document.querySelector(`[data-contact-id="${contactId}"]`);
+  if (!row) return;
+
+  document.getElementById('modal-title-text').textContent = 'Modifier le contact';
+  document.getElementById('contact-form').action = "{{ url_for('update_contact') }}";
+  document.getElementById('contact-id').value = contactId;
+
+  const map = {
+    first_name: 'firstName', last_name: 'lastName',
+    email: 'email', phone: 'phone', organization: 'organization',
+    url: 'url', birthday: 'birthday', street: 'street',
+    city: 'city', postal: 'postal', country: 'country', note: 'note'
+  };
+  Object.entries(map).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = row.dataset[key] || '';
+  });
+
+  // Show existing photo if any
+  resetPhotoPreview();
+  if (row.dataset.hasPhoto === '1') {
+    const img = row.querySelector('img.avatar');
+    if (img) {
+      const preview = document.getElementById('photo-preview');
+      preview.src = img.src;
+      preview.style.display = 'block';
+      document.getElementById('photo-placeholder').style.display = 'none';
+    }
+  }
+
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('first_name').focus();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// Close on overlay click
+document.getElementById('modal-overlay').addEventListener('click', closeModal);
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeConfirm(); }
+});
+
+// Photo preview
+document.getElementById('photo').addEventListener('change', function() {
+  const file = this.files[0];
+  if (file && file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const preview = document.getElementById('photo-preview');
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+      document.getElementById('photo-placeholder').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  } else {
+    resetPhotoPreview();
+  }
+});
+
+function resetPhotoPreview() {
+  document.getElementById('photo-preview').style.display = 'none';
+  document.getElementById('photo-preview').src = '';
+  document.getElementById('photo-placeholder').style.display = 'flex';
+}
+
+// ── Delete confirm ──
+function confirmDelete(id, name) {
+  pendingDeleteId = id;
+  document.getElementById('confirm-name').textContent =
+    `${name} sera définitivement supprimé.`;
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+
+function closeConfirm() {
+  pendingDeleteId = null;
+  document.getElementById('confirm-overlay').classList.remove('open');
+}
+
+function doDelete() {
+  if (!pendingDeleteId) return;
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = `/contacts/${pendingDeleteId}/delete`;
+  const csrf = document.createElement('input');
+  csrf.type = 'hidden';
+  csrf.name = 'csrf_token';
+  csrf.value = "{{ csrf_token() }}";
+  form.appendChild(csrf);
+  document.getElementById('delete-forms').appendChild(form);
+  form.submit();
+}
 </script>
-    </script>
 </body>
 </html>

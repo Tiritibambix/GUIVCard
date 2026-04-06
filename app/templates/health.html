@@ -1,73 +1,131 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='media/guivcard-icon.ico') }}">
-    <title>GUIVCard - Health Status</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='media/guivcard-icon.ico') }}">
+  <title>GUIVCard — Statut</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #181c27; --border: #252b3b;
+      --accent: #6c9fff; --text: #e8eaf0; --muted: #8892a4;
+      --success: #6bcb77; --danger: #ff6b6b;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    nav {
+      background: rgba(24,28,39,.9); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 58px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand {
+      font-family: 'DM Serif Display', serif; font-size: 1.25rem;
+      color: var(--text); text-decoration: none;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-brand .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
+    .nav-right { display: flex; gap: 6px; }
+    .nav-link {
+      font-size: .82rem; color: var(--muted); text-decoration: none;
+      padding: 6px 12px; border-radius: 8px; border: 1px solid transparent;
+      transition: all .15s;
+    }
+    .nav-link:hover { color: var(--text); background: #1e2333; border-color: var(--border); }
+
+    main { max-width: 640px; margin: 40px auto; padding: 0 20px; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 32px;
+    }
+
+    .card h2 {
+      font-family: 'DM Serif Display', serif; font-size: 1.4rem;
+      margin-bottom: 28px;
+    }
+
+    .status-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px; border-radius: 12px;
+      background: var(--bg); border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .status-dot {
+      width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    }
+    .status-dot.ok  { background: var(--success); box-shadow: 0 0 8px rgba(107,203,119,.5); }
+    .status-dot.err { background: var(--danger);  box-shadow: 0 0 8px rgba(255,107,107,.5); }
+
+    .status-detail h3 { font-size: .9rem; font-weight: 500; }
+    .status-detail p  { font-size: .8rem; color: var(--muted); margin-top: 3px; word-break: break-all; }
+
+    .status-message {
+      padding: 12px 16px; border-radius: 10px; font-size: .85rem; margin-top: 12px;
+    }
+    .status-message.ok  { background: rgba(107,203,119,.1); border: 1px solid rgba(107,203,119,.25); color: var(--success); }
+    .status-message.err { background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.25); color: var(--danger); }
+
+    .actions { display: flex; gap: 10px; margin-top: 24px; }
+
+    .btn {
+      padding: 10px 20px; border-radius: 9px;
+      font-family: 'DM Sans', sans-serif; font-size: .875rem; font-weight: 500;
+      cursor: pointer; text-decoration: none; border: none;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: opacity .2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: .85; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-outline:hover { color: var(--text); }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <nav class="bg-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <a href="{{ url_for('index') }}" class="text-gray-800 font-bold text-xl">GUIVCard</a>
-                </div>
-                <div class="flex items-center">
-                    <a href="{{ url_for('logout') }}" class="text-gray-600 hover:text-gray-900">Logout</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+<body>
+<nav>
+  <a class="nav-brand" href="{{ url_for('index') }}">
+    <span class="dot"></span> GUIVCard
+  </a>
+  <div class="nav-right">
+    <a class="nav-link" href="{{ url_for('contacts') }}">Contacts</a>
+    <a class="nav-link" href="{{ url_for('logout') }}">Déconnexion</a>
+  </div>
+</nav>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-2xl font-bold mb-6">System Health Status</h2>
-                
-                <div class="space-y-4">
-                    <div class="flex items-center">
-                        <div class="mr-4">
-                            {% if status.is_healthy %}
-                                <div class="w-4 h-4 rounded-full bg-green-500"></div>
-                            {% else %}
-                                <div class="w-4 h-4 rounded-full bg-red-500"></div>
-                            {% endif %}
-                        </div>
-                        <div>
-                            <h3 class="font-semibold">CardDAV Server</h3>
-                            <p class="text-gray-600">{{ status.carddav_url }}</p>
-                        </div>
-                    </div>
+<main>
+  <div class="card">
+    <h2>Statut du système</h2>
 
-                    <div class="border-t pt-4">
-                        <h4 class="font-semibold mb-2">Details</h4>
-                        {% if status.is_healthy %}
-                            <p class="text-green-600">Connected successfully (Status: {{ status.status_code }})</p>
-                        {% else %}
-                            {% if status.status_code %}
-                                <p class="text-red-600">Connection failed (Status: {{ status.status_code }})</p>
-                            {% endif %}
-                            {% if status.error %}
-                                <p class="text-red-600">Error: {{ status.error }}</p>
-                            {% endif %}
-                        {% endif %}
-                    </div>
-                </div>
+    <div class="status-row">
+      <div class="status-dot {{ 'ok' if status.is_healthy else 'err' }}"></div>
+      <div class="status-detail">
+        <h3>Serveur CardDAV</h3>
+        <p>{{ status.carddav_url }}</p>
+        {% if status.status_code %}
+        <p>HTTP {{ status.status_code }}</p>
+        {% endif %}
+      </div>
+    </div>
 
-                <div class="mt-6">
-                    <a href="{{ url_for('health_check') }}" 
-                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        Refresh Status
-                    </a>
-                    <a href="{{ url_for('index') }}"
-                       class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        Back to Dashboard
-                    </a>
-                </div>
-            </div>
-        </div>
-    </main>
+    <div class="status-message {{ 'ok' if status.is_healthy else 'err' }}">
+      {% if status.is_healthy %}
+        Connexion établie avec succès.
+      {% else %}
+        {{ status.error or status.message or 'Erreur de connexion.' }}
+      {% endif %}
+    </div>
+
+    <div class="actions">
+      <a href="{{ url_for('health_check') }}" class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        Actualiser
+      </a>
+      <a href="{{ url_for('contacts') }}" class="btn btn-outline">Retour aux contacts</a>
+    </div>
+  </div>
+</main>
 </body>
 </html>
