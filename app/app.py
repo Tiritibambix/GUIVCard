@@ -40,35 +40,46 @@ else:
     logger.info("GUIVCard starting. CardDAV template configured.")
 
 
-# Extract the fixed host+scheme from the server-side template at startup.
-# Used to validate that a built URL never escapes the configured server,
-# regardless of what the username contains.
-_TEMPLATE_PARSED = urlparse(CARDDAV_URL_TEMPLATE)
-_ALLOWED_SCHEME  = _TEMPLATE_PARSED.scheme   # e.g. "http" or "https"
-_ALLOWED_HOST    = _TEMPLATE_PARSED.netloc   # e.g. "radicale:5232"
+# Parse the server-side template once at startup into fixed, trusted components.
+# scheme, netloc, and the path template are all derived from the env var only —
+# never from user input.
+_TEMPLATE_PARSED  = urlparse(CARDDAV_URL_TEMPLATE)
+_FIXED_SCHEME     = _TEMPLATE_PARSED.scheme    # e.g. "https"
+_FIXED_NETLOC     = _TEMPLATE_PARSED.netloc    # e.g. "radicale:5232"
+_FIXED_PATH_TMPL  = _TEMPLATE_PARSED.path      # e.g. "/{username}/contacts/"
+_FIXED_QUERY      = _TEMPLATE_PARSED.query
+_FIXED_FRAGMENT   = _TEMPLATE_PARSED.fragment
+
+
+def _sanitize_username(username: str) -> str:
+    """
+    Strip any character that could alter URL structure.
+    Only alphanumeric, hyphen, underscore and dot are allowed in a Radicale username.
+    Raises ValueError for invalid usernames.
+    """
+    import re
+    if not re.match(r'^[A-Za-z0-9._-]+$', username):
+        raise ValueError("Username contains invalid characters.")
+    return username
 
 
 def build_user_url(username: str) -> str:
     """
-    Build the CardDAV collection URL for a given user.
-    The host and scheme are always taken from CARDDAV_URL_TEMPLATE (server-side env var).
-    Only the literal string '{username}' inside the path is replaced — the username
-    cannot alter the scheme, host, or port.
-    Raises ValueError if the resulting URL would point to a different host (SSRF guard).
+    Assemble the CardDAV URL from purely server-side components.
+    scheme, netloc and path structure come from CARDDAV_URL_TEMPLATE (env var).
+    username is sanitized to [A-Za-z0-9._-] before being inserted into the path.
+    CodeQL taint: username only reaches the path segment, never scheme or netloc.
     """
-    if '{username}' in CARDDAV_URL_TEMPLATE:
-        url = CARDDAV_URL_TEMPLATE.replace('{username}', username)
-    else:
-        url = CARDDAV_URL_TEMPLATE
+    safe_username = _sanitize_username(username)  # raises ValueError if invalid
 
-    # Hard check: scheme and netloc must exactly match the configured template.
-    parsed = urlparse(url)
-    if parsed.scheme != _ALLOWED_SCHEME or parsed.netloc != _ALLOWED_HOST:
-        raise ValueError(
-            f"Constructed URL does not match the configured CardDAV server. "
-            "Possible SSRF attempt via username."
-        )
-    return url
+    if '{username}' in _FIXED_PATH_TMPL:
+        path = _FIXED_PATH_TMPL.replace('{username}', safe_username)
+    else:
+        path = _FIXED_PATH_TMPL
+
+    # Re-assemble from fixed server-side parts — user input only in `path`.
+    from urllib.parse import urlunparse
+    return urlunparse((_FIXED_SCHEME, _FIXED_NETLOC, path, '', _FIXED_QUERY, _FIXED_FRAGMENT))
 
 
 # ---------------------------------------------------------------------------
@@ -98,15 +109,15 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
 def check_auth(username: str, password: str) -> bool:
     """Authenticate by PROPFIND against the user's CardDAV collection.
-    build_user_url() enforces that the URL host matches the server-side template,
-    so the username cannot redirect the request to an arbitrary host (SSRF guard).
+    build_user_url() sanitizes username to [A-Za-z0-9._-] and assembles the URL
+    from server-side-only components, cutting the CodeQL taint path.
     """
     if not username or not password:
         return False
     try:
-        user_url = build_user_url(username)  # raises ValueError on SSRF attempt
+        user_url = build_user_url(username)
     except ValueError as e:
-        logger.error(f"Auth rejected: {e}")
+        logger.error(f"Auth rejected — invalid username format: {e}")
         return False
     try:
         resp = requests.request(
