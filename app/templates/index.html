@@ -242,7 +242,7 @@
       {% if contact.photo %}
       <img class="avatar" src="data:image/jpeg;base64,{{ contact.photo }}" alt="{{ contact.name | e }}">
       {% else %}
-      <div class="avatar-initials">{{ ((contact.first_name[:1] if contact.first_name else '') + (contact.last_name[:1] if contact.last_name else '') or contact.name[:1] or '?') | upper }}</div>
+      <div class="avatar-initials">{{ contact.initials }}</div>
       {% endif %}
 
       <div class="contact-info">
@@ -408,9 +408,10 @@
 </div>
 
 <div id="delete-forms"></div>
+<div id="contact-data" data-total="{{ contacts|length }}" hidden></div>
 
 <script>
-const TOTAL = {{ contacts|length }};
+const TOTAL = parseInt(document.getElementById('contact-data').dataset.total, 10);
 let pendingDeleteId = null;
 
 // Sort — navigate with query param (server-side sort)

@@ -357,6 +357,11 @@ def parse_contacts_from_report(response_content: bytes) -> list:
         except Exception:
             pass
 
+        # Compute initials from already-normalised string fields
+        fi = _as_str(contact['first_name'])[:1]
+        li = _as_str(contact['last_name'])[:1]
+        contact['initials'] = (fi + li).upper() or _as_str(contact['name'])[:1].upper() or '?'
+
         contacts.append(contact)
         logger.debug(f"Parsed contact: {contact['name']} ({href})")
 
