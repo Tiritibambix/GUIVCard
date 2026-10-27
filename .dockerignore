@@ -14,6 +14,7 @@ tests
 
 # Documentation and deployment samples.
 README.md
+docs
 LICENSE
 docker-compose.yml
 

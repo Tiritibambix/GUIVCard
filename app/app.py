@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, session, flash, g
+from flask import Flask, request, render_template, redirect, url_for, session, flash, g, Response
 from functools import wraps
 import os
 import vobject
@@ -11,8 +11,11 @@ import uuid
 import secrets
 import threading
 import time
+import io
+import re
 from datetime import datetime, timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
+from PIL import Image, ImageOps
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -39,9 +42,79 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Strict',
     SESSION_COOKIE_SECURE=os.environ.get('SECURE_COOKIES', '').strip().lower() in ('1', 'true', 'yes'),
+    # An unbounded POST body would be read into memory; with several threads
+    # serving uploads, that is enough to exhaust the container. Photos are
+    # scaled down well below this, so the limit only stops abuse.
+    MAX_CONTENT_LENGTH=16 * 1024 * 1024,
 )
 if app.config['SESSION_COOKIE_SECURE']:
     logger.info("SECURE_COOKIES enabled — the session cookie requires HTTPS.")
+
+# How long to wait for the CardDAV server. A cold server, or a large address
+# book on modest hardware, takes well over the 10 seconds this used to allow.
+CARDDAV_TIMEOUT = 60
+
+# The app loads nothing from anywhere else: no CDN, no external script, no
+# frame. Photos render from data: URLs. Fonts come from Google Fonts, which is
+# the one exception, so the stylesheet and font origins are named explicitly.
+SECURITY_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+}
+
+
+@app.errorhandler(413)
+def payload_too_large(_error):
+    """MAX_CONTENT_LENGTH rejected the upload before it was read."""
+    limit_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    flash(f"That file is too large. The limit is {limit_mb} MB.", 'error')
+    return redirect(url_for('contacts') if is_signed_in() else url_for('login'))
+
+
+@app.before_request
+def generate_csp_nonce():
+    """A fresh nonce per response, for the templates' one <script> block.
+
+    This is what lets script-src drop 'unsafe-inline': an injected script
+    cannot carry a nonce it has no way to read. The templates also carry no
+    inline event handler, which a nonce would not cover.
+    """
+    g.csp_nonce = secrets.token_urlsafe(16)
+
+
+@app.context_processor
+def inject_csp_nonce():
+    return {'csp_nonce': g.get('csp_nonce', '')}
+
+
+@app.after_request
+def set_security_headers(response):
+    nonce = g.get('csp_nonce', '')
+    # style-src keeps 'unsafe-inline' for the inline <style> block, which
+    # cannot inject script; script-src does not.
+    response.headers.setdefault('Content-Security-Policy', (
+        "default-src 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        f"script-src 'self' 'nonce-{nonce}'; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'none'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    ))
+    for header, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+    # HSTS only means anything over HTTPS, and pinning it on a plain-HTTP LAN
+    # deployment would be a promise the server cannot keep.
+    if app.config['SESSION_COOKIE_SECURE']:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
+    return response
 
 # ---------------------------------------------------------------------------
 # CardDAV URL construction
@@ -72,7 +145,6 @@ def _sanitize_username(username: str) -> str:
     Only alphanumeric, hyphen, underscore and dot are allowed in a Radicale username.
     Raises ValueError for invalid usernames.
     """
-    import re
     if not re.match(r'^[A-Za-z0-9._-]+$', username):
         raise ValueError("Username contains invalid characters.")
     return username
@@ -222,7 +294,7 @@ def check_auth(username: str, password: str) -> bool:
             'PROPFIND', user_url,
             auth=(username, password),
             headers={'Depth': '0', 'User-Agent': 'GUIVCard/2.0'},
-            timeout=10
+            timeout=CARDDAV_TIMEOUT
         )
         success = resp.status_code == 207
         logger.info(f"Auth attempt: CardDAV returned {resp.status_code}")
@@ -308,6 +380,75 @@ def detect_image(data: bytes) -> Optional[Tuple[str, str]]:
     return None
 
 
+# A photo is bounded on both axes: 1024 px is past what any client displays
+# (Android keeps 720), and half a megabyte keeps the card under the size a
+# stock server accepts — an nginx in front of a CardDAV server commonly stops
+# at 1 MB, and base64 inflates the bytes by a third.
+PHOTO_MAX_DIMENSION = 1024
+PHOTO_MAX_BYTES = 512 * 1024
+
+# Decoding is bounded too: an 8 MB PNG can expand into gigabytes of bitmap.
+# Pillow warns at this count and refuses at twice it; 40 MP is past any phone.
+Image.MAX_IMAGE_PIXELS = 40_000_000
+
+
+def normalize_photo(data: bytes) -> Tuple[bytes, str, str]:
+    """Straighten, shrink and strip an uploaded photo.
+
+    Returns (bytes, vCard TYPE, MIME type).
+
+    An uploaded photo carries EXIF: the GPS coordinates of where it was taken,
+    the camera model, the timestamp, sometimes XMP. All of that used to be
+    written into the contact card and synced to every device and the server.
+    Decoding and re-encoding here drops it, because nothing is carried over.
+
+    It also applies the EXIF orientation, which Google Contacts ignores — a
+    photo taken in portrait showed up lying on its side — and bounds the
+    result, since a phone photo becomes several megabytes of base64 that a
+    stock server refuses and every client re-downloads on each sync.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            # Apply the orientation flag, then drop it with everything else.
+            image = ImageOps.exif_transpose(opened)
+            # A palette image may carry transparency; expand it to find out.
+            if image.mode == 'P':
+                image = image.convert('RGBA' if 'transparency' in image.info else 'RGB')
+            keeps_alpha = image.mode in ('RGBA', 'LA')
+            image = image.convert('RGBA' if keeps_alpha else 'RGB')
+            image.load()
+    except Exception as e:
+        logger.warning(f"Could not decode uploaded photo: {type(e).__name__}")
+        raise ValueError(
+            "That image could not be read. Use a JPEG, PNG, GIF or WebP file."
+        )
+
+    # Transparency needs PNG; anything else is smaller as JPEG.
+    fmt, vcard_type, mime = ('PNG', 'PNG', 'image/png') if keeps_alpha else ('JPEG', 'JPEG', 'image/jpeg')
+
+    smallest = None
+    for dimension in (PHOTO_MAX_DIMENSION, 800, 640, 512, 400):
+        candidate = image.copy()
+        candidate.thumbnail((dimension, dimension), Image.LANCZOS)
+        qualities = (90, 80, 70) if fmt == 'JPEG' else (None,)
+        for quality in qualities:
+            buf = io.BytesIO()
+            if quality is None:
+                candidate.save(buf, format=fmt, optimize=True)
+            else:
+                candidate.save(buf, format=fmt, quality=quality, optimize=True)
+            encoded = buf.getvalue()
+            if len(encoded) <= PHOTO_MAX_BYTES:
+                return encoded, vcard_type, mime
+            if smallest is None or len(encoded) < len(smallest):
+                smallest = encoded
+
+    # Nothing fitted the budget. The smallest attempt still beats the original,
+    # and the server's own limit will report it if it is still too large.
+    logger.warning(f"Photo still {len(smallest)} bytes after scaling down.")
+    return smallest, vcard_type, mime
+
+
 def _first(vobj, name: str):
     """The first instance of a property, or None."""
     lines = vobj.contents.get(name)
@@ -326,6 +467,53 @@ def _set_text(vobj, name: str, value: str) -> None:
             line = vobj.add(name)
         line.value = value
     elif line is not None:
+        vobj.remove(line)
+
+
+# The TYPE tokens the editor's dropdowns own. Any other token on a property —
+# INTERNET, PREF, VOICE, and whatever a client invented — is left alone, so
+# choosing "Work" in the UI does not quietly drop TYPE=PREF.
+MANAGED_EMAIL_TYPES = ('HOME', 'WORK', 'OTHER')
+MANAGED_TEL_TYPES = ('CELL', 'HOME', 'WORK', 'FAX', 'PAGER', 'OTHER')
+
+
+def read_type(line, managed: Tuple[str, ...]) -> str:
+    """The first TYPE token the editor manages, or '' if the line has none."""
+    for token in line.params.get('TYPE', []):
+        if token.upper() in managed:
+            return token.upper()
+    return ''
+
+
+def write_type(line, chosen: str, managed: Tuple[str, ...]) -> None:
+    """Replace the managed TYPE token, keeping every other one."""
+    kept = [t for t in line.params.get('TYPE', []) if t.upper() not in managed]
+    tokens = kept + ([chosen] if chosen else [])
+    if tokens:
+        line.params['TYPE'] = tokens
+    else:
+        line.params.pop('TYPE', None)
+
+
+def _set_typed_list(vobj, name: str, entries: List[dict], managed: Tuple[str, ...]) -> None:
+    """Apply a list of {value, type} onto a multi-valued property.
+
+    Existing lines are reused in order rather than recreated, so parameters
+    the editor does not manage stay on the line they belong to. Lines past the
+    end of the submitted list are removed, which is how a deleted row works.
+    """
+    kept = [e for e in entries if e.get('value')]
+    existing = list(vobj.contents.get(name, []))
+
+    for index, entry in enumerate(kept):
+        if index < len(existing):
+            line = existing[index]
+        else:
+            line = vobj.add(name)
+        line.value = entry['value']
+        write_type(line, entry.get('type', ''), managed)
+
+    for line in existing[len(kept):]:
         vobj.remove(line)
 
 
@@ -365,10 +553,26 @@ def apply_contact_fields(vobj, data: Dict) -> None:
     elif org_line is not None:
         vobj.remove(org_line)
 
-    _set_text(vobj, 'email', data.get('EMAIL', ''))
-    _set_text(vobj, 'tel', data.get('TEL', ''))
+    _set_typed_list(vobj, 'email', data.get('EMAILS', []), MANAGED_EMAIL_TYPES)
+    _set_typed_list(vobj, 'tel', data.get('TELS', []), MANAGED_TEL_TYPES)
     _set_text(vobj, 'url', data.get('URL', ''))
-    _set_text(vobj, 'bday', data.get('BDAY', ''))
+    # A year-less birthday keeps the form the card already used, so a card
+    # written by an Apple device stays readable to Apple devices. _set_text
+    # assigns to the existing line, which carries X-APPLE-OMIT-YEAR along.
+    bday = data.get('BDAY', '')
+    bday_line = _first(vobj, 'bday')
+    if bday_line is not None:
+        was_apple = (
+            'X-APPLE-OMIT-YEAR' in bday_line.params
+            or str(bday_line.value).strip().startswith(APPLE_OMIT_YEAR)
+        )
+        if bday.startswith('--') and was_apple:
+            bday = f"{APPLE_OMIT_YEAR}-{bday[2:4]}-{bday[4:6]}"
+        elif not bday.startswith('--'):
+            # The user supplied a real year; the marker no longer applies.
+            bday_line.params.pop('X-APPLE-OMIT-YEAR', None)
+    _set_text(vobj, 'bday', bday)
+
     _set_text(vobj, 'note', data.get('NOTE', ''))
 
     # ADR: the form edits four of the seven components. The post box, extended
@@ -392,17 +596,18 @@ def apply_contact_fields(vobj, data: Dict) -> None:
     # is never re-encoded or dropped by an edit that did not concern it.
     photo = data.get('PHOTO')
     if isinstance(photo, bytes) and photo:
-        detected = detect_image(photo)
-        if detected is None:
-            raise ValueError("Unsupported image format — use JPEG, PNG, GIF or WebP.")
-        vcard_type, _mime = detected
+        normalized, vcard_type, _mime = normalize_photo(photo)
         photo_line = _first(vobj, 'photo')
         if photo_line is None:
             photo_line = vobj.add('photo')
-        photo_line.value = photo
+        photo_line.value = normalized
         photo_line.encoding_param = 'B'
         photo_line.type_param = vcard_type
         photo_line.encoded = False
+    elif data.get('REMOVE_PHOTO'):
+        photo_line = _first(vobj, 'photo')
+        if photo_line is not None:
+            vobj.remove(photo_line)
 
     # RFC 6350 §6.7.4: REV marks the card's last change, so other clients can
     # tell this version is the newer one.
@@ -430,23 +635,54 @@ def serialize_updated_vcard(vobj, data: Dict) -> str:
     return vobj.serialize(validate=False)
 
 
+# Apple stores a birthday whose year is unknown as the year 1604, marked with
+# X-APPLE-OMIT-YEAR. Some iOS-written cards use 1604 without the marker.
+APPLE_OMIT_YEAR = '1604'
+
+
 def normalize_birthday_to_iso(bday: str) -> str:
+    """`dd/mm/yyyy`, or `dd/mm` for a birthday whose year is not known.
+
+    A year-less birthday is stored as vCard's own `--MMDD`; a card that already
+    used Apple's form keeps it (see apply_contact_fields).
+    """
     bday = bday.strip()
-    if '/' in bday:
-        parts = bday.split('/')
-        if len(parts) == 3:
-            day, month, year = parts
-            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+    if '/' not in bday:
+        return bday
+    parts = [p.strip() for p in bday.split('/')]
+    if len(parts) == 2 and all(parts):
+        day, month = parts
+        return f"--{month.zfill(2)}{day.zfill(2)}"
+    if len(parts) == 3 and all(parts):
+        day, month, year = parts
+        return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
     return bday
 
 
-def normalize_birthday_to_display(bday: str) -> str:
-    bday = bday.strip()
-    if '-' in bday:
-        parts = bday.split('-')
-        if len(parts) == 3:
-            year, month, day = parts
-            return f"{day}/{month}/{year}"
+def normalize_birthday_to_display(bday: str, omit_year: bool = False) -> str:
+    """The stored birthday as `dd/mm/yyyy`, or `dd/mm` when it carries no year.
+
+    `--MMDD` used to come out as the string "0517//", and Apple's 1604 as
+    "17/05/1604".
+    """
+    bday = (bday or '').strip()
+    if not bday:
+        return ''
+
+    without_year = re.fullmatch(r'--(\d{2})-?(\d{2})', bday)
+    if without_year:
+        month, day = without_year.groups()
+        return f"{day}/{month}"
+
+    full = re.fullmatch(r'(\d{4})-?(\d{2})-?(\d{2})', bday)
+    if full:
+        year, month, day = full.groups()
+        if omit_year or year == APPLE_OMIT_YEAR:
+            return f"{day}/{month}"
+        return f"{day}/{month}/{year}"
+
+    # Anything else (a datetime, a partial date) is shown as stored rather
+    # than mangled.
     return bday
 
 
@@ -499,6 +735,7 @@ def parse_contacts_from_report(response_content: bytes) -> list:
             'name': fn_val or 'No Name',
             'first_name': '', 'last_name': '',
             'email': '', 'phone': '', 'org': '',
+            'emails': [], 'phones': [],
             'url': '', 'birthday': '', 'note': '',
             'photo': None, 'photo_mime': 'image/jpeg', 'address': None
         }
@@ -510,15 +747,27 @@ def parse_contacts_from_report(response_content: bytes) -> list:
         except Exception:
             pass
 
+        # Every instance is read, with the TYPE the editor manages. The first
+        # of each also feeds the list row and the search haystack.
         try:
-            if 'email' in vcard_data.contents:
-                contact['email'] = vcard_data.email.value
+            contact['emails'] = [
+                {'value': _as_str(line.value), 'type': read_type(line, MANAGED_EMAIL_TYPES)}
+                for line in vcard_data.contents.get('email', [])
+                if _as_str(line.value)
+            ]
+            if contact['emails']:
+                contact['email'] = contact['emails'][0]['value']
         except Exception:
             pass
 
         try:
-            if 'tel' in vcard_data.contents:
-                contact['phone'] = vcard_data.tel.value
+            contact['phones'] = [
+                {'value': _as_str(line.value), 'type': read_type(line, MANAGED_TEL_TYPES)}
+                for line in vcard_data.contents.get('tel', [])
+                if _as_str(line.value)
+            ]
+            if contact['phones']:
+                contact['phone'] = contact['phones'][0]['value']
         except Exception:
             pass
 
@@ -542,7 +791,11 @@ def parse_contacts_from_report(response_content: bytes) -> list:
 
         try:
             if 'bday' in vcard_data.contents:
-                contact['birthday'] = normalize_birthday_to_display(vcard_data.bday.value)
+                line = vcard_data.bday
+                contact['birthday'] = normalize_birthday_to_display(
+                    _as_str(line.value),
+                    omit_year='X-APPLE-OMIT-YEAR' in line.params,
+                )
         except Exception:
             pass
 
@@ -580,10 +833,93 @@ def parse_contacts_from_report(response_content: bytes) -> list:
         li = _as_str(contact['last_name'])[:1]
         contact['initials'] = (fi + li).upper() or _as_str(contact['name'])[:1].upper() or '?'
 
+        # One haystack for the live filter, built here rather than assembled in
+        # the browser, so every e-mail and phone number is searchable.
+        haystack = [
+            contact['name'], contact['first_name'], contact['last_name'],
+            contact['org'], contact['url'], contact['birthday'], contact['note'],
+        ]
+        haystack += [e['value'] for e in contact['emails']]
+        haystack += [p['value'] for p in contact['phones']]
+        if contact['address']:
+            haystack += [
+                contact['address']['street'], contact['address']['city'],
+                contact['address']['postal'], contact['address']['country'],
+            ]
+        contact['search'] = ' '.join(_as_str(v) for v in haystack if v).lower()
+
         contacts.append(contact)
         logger.debug(f"Parsed contact: {contact['name']} ({href})")
 
     return contacts
+
+
+REPORT_BODY = '''<?xml version="1.0" encoding="utf-8" ?>
+<C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+        <D:getetag/>
+        <C:address-data/>
+    </D:prop>
+</C:addressbook-query>'''
+
+
+def fetch_address_book(s: requests.Session, carddav_url: str) -> bytes:
+    """Run the addressbook-query REPORT and return its body.
+
+    Shared by the contact list, the export and the import's duplicate check.
+    """
+    resp = s.request(
+        'REPORT', carddav_url,
+        headers={'Depth': '1', 'Content-Type': 'application/xml; charset=utf-8'},
+        data=REPORT_BODY.encode('utf-8'),
+        timeout=CARDDAV_TIMEOUT
+    )
+    logger.info(f"REPORT → {resp.status_code}")
+    if resp.status_code != 207:
+        logger.error(f"REPORT failed: {resp.status_code} — {resp.text[:300]}")
+        raise Exception(f"Could not read the address book (status {resp.status_code}).")
+    return resp.content
+
+
+def parse_raw_cards_from_report(response_content: bytes) -> List[str]:
+    """The cards' own text, exactly as the server returned it.
+
+    The export writes these bytes through untouched: round-tripping them
+    through the parser would be a chance to lose something.
+    """
+    from xml.etree import ElementTree
+
+    try:
+        root = ElementTree.fromstring(response_content)
+    except ElementTree.ParseError as e:
+        logger.error(f"Failed to parse REPORT XML: {e}")
+        return []
+
+    ns = {'D': 'DAV:', 'C': 'urn:ietf:params:xml:ns:carddav'}
+    cards = []
+    for elem in root.findall('.//D:response', ns):
+        href_el = elem.find('.//D:href', ns)
+        if href_el is None or not (href_el.text or '').endswith('.vcf'):
+            continue
+        address_data = elem.find('.//C:address-data', ns)
+        if address_data is not None and address_data.text:
+            cards.append(address_data.text.strip())
+    return cards
+
+
+def card_uids(raw_cards: List[str]) -> set:
+    """The UIDs already in the address book, for skipping on import."""
+    uids = set()
+    for text in raw_cards:
+        try:
+            vobj = vobject.readOne(text)
+            if 'uid' in vobj.contents:
+                uid = _as_str(vobj.uid.value).strip()
+                if uid:
+                    uids.add(uid)
+        except Exception:
+            continue
+    return uids
 
 
 def _as_str(value) -> str:
@@ -627,6 +963,24 @@ def sort_contacts(contacts: list, sort_by: str = 'first_name') -> list:
         return contacts
 
 
+def _collect_typed_rows(form, field: str, managed: Tuple[str, ...]) -> List[dict]:
+    """Read the repeated value/type rows of one multi-valued field.
+
+    The two lists arrive in the order the rows appear, so a value keeps the
+    type selected beside it. A row left blank is dropped.
+    """
+    values = form.getlist(field)
+    types = form.getlist(f"{field}_type")
+    rows = []
+    for index, value in enumerate(values):
+        value = value.strip()
+        if not value:
+            continue
+        chosen = types[index].strip().upper() if index < len(types) else ''
+        rows.append({'value': value, 'type': chosen if chosen in managed else ''})
+    return rows
+
+
 def collect_vcard_data_from_form(form, files=None) -> dict:
     """Read the editor's fields off the form.
 
@@ -643,8 +997,8 @@ def collect_vcard_data_from_form(form, files=None) -> dict:
         'FN': f"{first_name} {last_name}".strip(),
         'FIRST_NAME': first_name,
         'LAST_NAME': last_name,
-        'EMAIL': form.get('email', '').strip(),
-        'TEL': form.get('phone', '').strip(),
+        'EMAILS': _collect_typed_rows(form, 'email', MANAGED_EMAIL_TYPES),
+        'TELS': _collect_typed_rows(form, 'phone', MANAGED_TEL_TYPES),
         'ORG': form.get('organization', '').strip(),
         'URL': form.get('url', '').strip(),
         'NOTE': form.get('note', '').strip(),
@@ -656,6 +1010,9 @@ def collect_vcard_data_from_form(form, files=None) -> dict:
             'country': form.get('country', '').strip(),
         },
     }
+
+    if form.get('remove_photo') == '1':
+        data['REMOVE_PHOTO'] = True
 
     if files and 'photo' in files:
         photo_file = files['photo']
@@ -724,7 +1081,7 @@ def health_check():
     s = get_user_session()
     status = {'carddav_url': carddav_url, 'is_healthy': False, 'status_code': None, 'error': None}
     try:
-        resp = s.request('PROPFIND', carddav_url, headers={'Depth': '1'}, timeout=10)
+        resp = s.request('PROPFIND', carddav_url, headers={'Depth': '1'}, timeout=CARDDAV_TIMEOUT)
         status['is_healthy'] = resp.status_code == 207
         status['status_code'] = resp.status_code
         status['message'] = (
@@ -767,10 +1124,15 @@ def contacts():
                 data=vcard_content.encode('utf-8'),
                 # If-None-Match: * creates only if nothing is already there.
                 headers={'Content-Type': 'text/vcard; charset=utf-8', 'If-None-Match': '*'},
-                timeout=10
+                timeout=CARDDAV_TIMEOUT
             )
             if resp.status_code == 412:
                 raise Exception("A contact already exists at that address. Try again.")
+            if resp.status_code == 413:
+                raise Exception(
+                    "The CardDAV server refused the contact for its size. "
+                    "A smaller photo should fit."
+                )
             if resp.status_code not in (201, 204):
                 raise Exception(f"Status {resp.status_code}: {resp.text[:200]}")
             flash('Contact created successfully.', 'success')
@@ -783,38 +1145,123 @@ def contacts():
 
     contact_list = []
     try:
-        report_body = '''<?xml version="1.0" encoding="utf-8" ?>
-<C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
-    <D:prop>
-        <D:getetag/>
-        <C:address-data/>
-    </D:prop>
-</C:addressbook-query>'''
-
-        resp = s.request(
-            'REPORT', carddav_url,
-            headers={
-                'Depth': '1',
-                'Content-Type': 'application/xml; charset=utf-8',
-            },
-            data=report_body.encode('utf-8'),
-            timeout=30
-        )
-
-        logger.info(f"REPORT → {resp.status_code}")
-
-        if resp.status_code == 207:
-            contact_list = parse_contacts_from_report(resp.content)
-            contact_list = sort_contacts(contact_list, sort_by)
-            logger.info(f"Loaded {len(contact_list)} contacts.")
-        else:
-            logger.error(f"REPORT failed: {resp.status_code} — {resp.text[:300]}")
-            flash(f"Could not load contacts (status {resp.status_code}).", 'error')
+        contact_list = parse_contacts_from_report(fetch_address_book(s, carddav_url))
+        contact_list = sort_contacts(contact_list, sort_by)
+        logger.info(f"Loaded {len(contact_list)} contacts.")
     except Exception as e:
         logger.error(f"Error listing contacts: {e}")
         flash(f"Error: {e}", 'error')
 
-    return render_template('index.html', contacts=contact_list, sort_by=sort_by)
+    return render_template(
+        'index.html',
+        contacts=contact_list,
+        sort_by=sort_by,
+        email_types=MANAGED_EMAIL_TYPES,
+        tel_types=MANAGED_TEL_TYPES,
+    )
+
+
+@app.route('/contacts/export')
+@check_login_required
+def export_contacts():
+    """Download the whole address book as one .vcf file."""
+    s = get_user_session()
+    try:
+        raw_cards = parse_raw_cards_from_report(fetch_address_book(s, get_user_carddav_url()))
+    except Exception as e:
+        logger.error(f"Export failed: {e}")
+        flash(f"Could not export: {e}", 'error')
+        return redirect(url_for('contacts'))
+
+    if not raw_cards:
+        flash('There is nothing to export.', 'message')
+        return redirect(url_for('contacts'))
+
+    # The cards go out as the server stored them, unparsed.
+    body = '\r\n'.join(raw_cards) + '\r\n'
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%d')
+    filename = f"contacts-{g.username}-{stamp}.vcf"
+    logger.info(f"Exported {len(raw_cards)} contacts.")
+    return Response(
+        body.encode('utf-8'),
+        mimetype='text/vcard; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@app.route('/contacts/import', methods=['POST'])
+@check_login_required
+def import_contacts():
+    """Add the cards of an uploaded .vcf file that are not already here.
+
+    A card whose UID is already in the book is skipped rather than merged:
+    overwriting someone's contact with a stale copy from a file is worse than
+    doing nothing, and there is no conflict UI for a bulk operation.
+    """
+    if not validate_csrf():
+        flash('Invalid request (CSRF).', 'error')
+        return redirect(url_for('contacts'))
+
+    upload = request.files.get('vcf')
+    if not upload or not upload.filename:
+        flash('Choose a .vcf file to import.', 'error')
+        return redirect(url_for('contacts'))
+
+    s = get_user_session()
+    carddav_url = get_user_carddav_url()
+
+    try:
+        text = upload.read().decode('utf-8', errors='replace')
+        existing = card_uids(parse_raw_cards_from_report(fetch_address_book(s, carddav_url)))
+    except Exception as e:
+        logger.error(f"Import could not start: {e}")
+        flash(f"Could not import: {e}", 'error')
+        return redirect(url_for('contacts'))
+
+    added = skipped = failed = 0
+    try:
+        cards = list(vobject.readComponents(text, ignoreUnreadable=True))
+    except Exception as e:
+        logger.error(f"Import could not parse the file: {e}")
+        flash('That file could not be read as vCard.', 'error')
+        return redirect(url_for('contacts'))
+
+    for vobj in cards:
+        try:
+            if 'uid' in vobj.contents:
+                uid = _as_str(vobj.uid.value).strip()
+            else:
+                uid = str(uuid.uuid4())
+                vobj.add('uid').value = uid
+            if uid in existing:
+                skipped += 1
+                continue
+
+            filename = f"{base64.urlsafe_b64encode(os.urandom(12)).decode()}.vcf"
+            resp = s.put(
+                f"{carddav_url.rstrip('/')}/{filename}",
+                data=vobj.serialize(validate=False).encode('utf-8'),
+                headers={'Content-Type': 'text/vcard; charset=utf-8', 'If-None-Match': '*'},
+                timeout=CARDDAV_TIMEOUT
+            )
+            if resp.status_code in (201, 204):
+                added += 1
+                existing.add(uid)
+            else:
+                failed += 1
+                logger.warning(f"Import rejected a card: status {resp.status_code}")
+        except Exception as e:
+            failed += 1
+            logger.warning(f"Import skipped a card: {type(e).__name__}")
+
+    parts = [f"{added} added"]
+    if skipped:
+        parts.append(f"{skipped} already here")
+    if failed:
+        parts.append(f"{failed} could not be read")
+    flash(f"Import finished: {', '.join(parts)}.", 'error' if failed and not added else 'success')
+    logger.info(f"Import: {added} added, {skipped} skipped, {failed} failed.")
+    return redirect(url_for('contacts', sort=session.get('sort_by', 'first_name')))
 
 
 @app.route('/contacts/update', methods=['POST'])
@@ -843,7 +1290,7 @@ def update_contact():
 
         contact_url = f"{carddav_url.rstrip('/')}/{contact_id}"
 
-        existing_resp = s.get(contact_url, timeout=10)
+        existing_resp = s.get(contact_url, timeout=CARDDAV_TIMEOUT)
         if existing_resp.status_code != 200:
             raise Exception(f"Could not fetch contact: status {existing_resp.status_code}")
 
@@ -861,7 +1308,7 @@ def update_contact():
             contact_url,
             data=vcard_content.encode('utf-8'),
             headers={'Content-Type': 'text/vcard; charset=utf-8', 'If-Match': etag},
-            timeout=10
+            timeout=CARDDAV_TIMEOUT
         )
         if resp.status_code == 412:
             flash(
@@ -869,6 +1316,11 @@ def update_contact():
                 'Nothing was saved — reload and make your change again.', 'error'
             )
             return redirect(url_for('contacts', sort=session.get('sort_by', 'first_name')))
+        if resp.status_code == 413:
+            raise Exception(
+                "The CardDAV server refused the contact for its size. "
+                "A smaller photo should fit."
+            )
         if resp.status_code not in (200, 201, 204):
             raise Exception(f"Status {resp.status_code}: {resp.text[:200]}")
 
@@ -901,7 +1353,7 @@ def delete_contact(contact_id):
             )
 
         contact_url = f"{carddav_url.rstrip('/')}/{contact_id}"
-        resp = s.delete(contact_url, headers={'If-Match': etag}, timeout=10)
+        resp = s.delete(contact_url, headers={'If-Match': etag}, timeout=CARDDAV_TIMEOUT)
         if resp.status_code == 412:
             flash(
                 'This contact was changed somewhere else since you opened this page. '

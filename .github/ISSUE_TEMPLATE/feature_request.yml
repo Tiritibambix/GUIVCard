@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest something GUIVCard should do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GUIVCard is deliberately small: a contacts editor for a CardDAV server,
+        and nothing else. Calendars, tasks, mail and its own user accounts are
+        out of scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem, rather than the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you work around it today?
+    validations:
+      required: false

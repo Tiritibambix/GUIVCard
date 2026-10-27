@@ -40,12 +40,21 @@ A clean, dark-themed web interface for managing contacts stored on a [Radicale](
 - CSRF protection on all state-changing requests, with a fresh token on each sign-in
 
 ### Contact management
-- **Create** contacts with first name, last name (optional), organization, email, phone, website, birthday, address, notes, and photo
-- **Edit** contacts in a modal — existing photo preserved unless a new one is uploaded
+- **Create** contacts with first name, last name (optional), organization, website, birthday, address, notes, and photo
+- **Several emails and phone numbers** per contact, each with a type (home, work, mobile, fax…)
+- **Edit** contacts in a modal — existing photo preserved unless a new one is uploaded or explicitly removed
 - **Delete** contacts with a confirmation dialog
-- **Nothing you can't see is lost.** Saving a contact keeps every property the editor doesn't show — additional emails and phone numbers, their `TYPE` parameters, group memberships, `NICKNAME`, `TITLE`, `IMPP`, custom `X-*` fields. Only the fields on the form are rewritten
+- **Import and export** `.vcf` files. Export writes the cards exactly as the server stored them; import skips a card whose UID is already present rather than overwriting it
+- **Nothing you can't see is lost.** Saving a contact keeps every property the editor doesn't show — `NICKNAME`, `TITLE`, `ROLE`, `IMPP`, `CATEGORIES`, custom `X-*` fields — and every `TYPE` parameter it doesn't manage, such as `PREF` and `INTERNET`. Structured values keep their hidden components too: `N` its prefix and middle name, `ADR` its post box and region, `ORG` its sub-units
 - **No silent overwrites.** Every write carries `If-Match`, so a contact changed on your phone since the page loaded is reported as a conflict instead of being overwritten
+- **Birthdays without a year** work in all three forms found in the wild: vCard's `--MMDD`, Apple's year 1604 with `X-APPLE-OMIT-YEAR`, and iOS cards that use 1604 without the marker. A card keeps the form it arrived in
 - vCard 3.0, serialized with `vobject` for RFC-compliant escaping
+
+### Photos
+- **Metadata is stripped.** An uploaded photo is decoded and re-encoded, so the GPS coordinates of where it was taken, the camera model and the timestamp never reach your address book
+- **Orientation is applied**, because Google Contacts ignores the EXIF flag and would show a portrait photo on its side
+- **Size is bounded** to 1024 px and 512 KB, past what any client displays — a raw phone photo becomes megabytes of base64 that servers refuse and every device re-downloads on each sync
+- Transparency is kept by storing as PNG; everything else becomes JPEG
 
 ### Browse & sort
 - Live search across name, email, phone, organization, address fields — no page reload
@@ -57,12 +66,24 @@ A clean, dark-themed web interface for managing contacts stored on a [Radicale](
 - Dark theme, custom CSS — no CDN dependency
 - Avatar with initials fallback when no photo is available
 - Flash messages colored by type: green for success, red for error
-- Fully accessible: labels on all inputs, ARIA roles on dialogs, keyboard navigation (Escape closes modals)
+- Keyboard shortcuts: `/` focuses the search, `N` opens a new contact, `Esc` closes a dialog or clears the search, `?` lists them. A single key never fires while you are typing
+- Accessibility: labels on every input, ARIA roles on dialogs, list semantics on the contact list, the result count announced as it changes, and the focus returned to whatever opened a dialog. This has **not** been audited with a screen reader or an automated checker — see [compatibility](docs/compatibility.md)
+
+### Security headers
+Every response carries a Content Security Policy with no `unsafe-inline` for
+scripts — the one inline script block is allowed by a per-response nonce, and
+the templates contain no inline event handler. Alongside it:
+`X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
+`Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, a
+`Permissions-Policy` denying camera, microphone, geolocation, payment and USB,
+and HSTS when `SECURE_COOKIES` is on.
 
 ### Infrastructure
 - Runs on **gunicorn** (production WSGI server) — no Flask dev server warning. One worker with 8 threads, since sessions live in the process's memory
+- Multi-stage Docker image: the compiler toolchain stays in the build stage
 - Docker image published on Docker Hub: `tiritibambix/guivcard`
 - Multi-architecture builds: `linux/amd64`, `linux/arm64`
+- Uploads are bounded by `MAX_CONTENT_LENGTH`, and a card the server refuses for its size reports why
 - Dependency security audit via `pip-audit` on every push
 - vCard round-trip tests gate the image build, so a save can never start dropping fields unnoticed
 - GitHub Actions CI with explicit `GITHUB_TOKEN` permission scoping
@@ -104,7 +125,12 @@ docker compose up -d
 |------------------|----------|--------------------------------------------------------------------------------------------------------------|
 | `SECRET_KEY`     | Yes      | Flask session signing key. Generate once and keep stable across restarts.                                    |
 | `CARDDAV_URL`    | Yes      | CardDAV collection URL. Supports `{username}` placeholder for multi-user setups.                             |
-| `SECURE_COOKIES` | No       | Set to `true` to mark the session cookie `Secure`. Turn it on behind an HTTPS reverse proxy; leave it off for the plain-HTTP quick start, or sign-in will not work. |
+| `SECURE_COOKIES` | No       | Set to `true` to mark the session cookie `Secure` and send HSTS. Turn it on behind an HTTPS reverse proxy; leave it off for the plain-HTTP quick start, or sign-in will not work. |
+
+## Documentation
+
+- [Compatibility](docs/compatibility.md) — which servers and clients have actually been checked, and the known gaps. Read this before trusting the app with an address book you care about.
+- [Security policy](.github/SECURITY.md) — what is in scope and how to report a vulnerability privately.
 
 ---
 

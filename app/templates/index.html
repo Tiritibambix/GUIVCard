@@ -174,6 +174,64 @@
     .confirm-actions { display:flex; gap:10px; justify-content:center; }
     .btn-confirm-del { background:var(--danger); border:none; border-radius:9px; padding:10px 22px; color:#fff; font-family:'DM Sans',sans-serif; font-size:.875rem; font-weight:500; cursor:pointer; transition:opacity .2s; }
     .btn-confirm-del:hover { opacity:.85; }
+
+    /* Multi-valued field rows */
+    .row-group { display:flex; flex-direction:column; gap:8px; }
+    .value-row { display:flex; gap:8px; align-items:center; }
+    .value-row .row-type {
+      appearance:none; flex-shrink:0; width:96px;
+      background:var(--bg); border:1px solid var(--border2); border-radius:9px;
+      padding:10px 26px 10px 10px; color:var(--muted); font-family:'DM Sans',sans-serif;
+      font-size:.8rem; cursor:pointer; outline:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238892a4' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 8px center;
+    }
+    .value-row .row-type:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); color:var(--text); }
+    .value-row .row-type option { background:var(--surface2); color:var(--text); }
+    .value-row .form-input { flex:1; }
+    .btn-row-remove {
+      flex-shrink:0; width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+      border-radius:8px; border:1px solid var(--border2); background:transparent;
+      color:var(--muted2); cursor:pointer; transition:all .15s;
+    }
+    .btn-row-remove:hover { background:var(--danger-dim); color:var(--danger); border-color:rgba(255,107,107,.3); }
+    .btn-add-row {
+      align-self:flex-start; margin-top:2px; background:transparent; border:1px dashed var(--border2);
+      border-radius:8px; padding:7px 12px; color:var(--muted); font-family:'DM Sans',sans-serif;
+      font-size:.78rem; cursor:pointer; transition:all .15s;
+    }
+    .btn-add-row:hover { background:var(--surface2); color:var(--text); border-style:solid; }
+
+    /* Photo removal */
+    .photo-remove { display:flex; align-items:center; gap:7px; margin-top:8px; font-size:.78rem; color:var(--muted); }
+    .photo-remove input { accent-color:var(--danger); cursor:pointer; }
+
+    /* Toolbar extras */
+    .toolbar-group { display:flex; gap:6px; }
+    .btn-tool {
+      background:var(--surface); border:1px solid var(--border); border-radius:10px;
+      padding:10px 14px; color:var(--muted); font-family:'DM Sans',sans-serif;
+      font-size:.82rem; cursor:pointer; text-decoration:none; display:flex;
+      align-items:center; gap:6px; transition:all .15s; white-space:nowrap;
+    }
+    .btn-tool:hover { color:var(--text); background:var(--surface2); border-color:var(--border2); }
+
+    /* Keyboard shortcuts dialog */
+    .shortcuts { display:grid; grid-template-columns:auto 1fr; gap:10px 16px; align-items:center; }
+    .shortcuts kbd {
+      font-family:ui-monospace,monospace; font-size:.78rem; background:var(--bg);
+      border:1px solid var(--border2); border-bottom-width:2px; border-radius:6px;
+      padding:3px 8px; color:var(--text); justify-self:start; white-space:nowrap;
+    }
+    .shortcuts span { font-size:.85rem; color:var(--muted); }
+
+    /* Visible focus for keyboard users everywhere */
+    :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+    .sr-only {
+      position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+    }
   </style>
 </head>
 <body>
@@ -191,7 +249,7 @@
 
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-  <div class="flash-area">
+  <div class="flash-area" role="status">
     {% for category, message in messages %}
     <div class="flash {{ category }}">{{ message }}</div>
     {% endfor %}
@@ -202,109 +260,131 @@
 <main>
   <div class="toolbar">
     <div class="search-wrap">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input id="search" type="text" placeholder="Search contacts…" aria-label="Search contacts">
     </div>
 
     <div class="sort-wrap">
-      <select class="sort-select" id="sort-select" aria-label="Sort by" onchange="applySort(this.value)">
+      <label class="sr-only" for="sort-select">Sort contacts by</label>
+      <select class="sort-select" id="sort-select">
         <option value="first_name" {{ 'selected' if sort_by == 'first_name' }}>Sort: First name</option>
         <option value="last_name"  {{ 'selected' if sort_by == 'last_name'  }}>Sort: Last name</option>
         <option value="org"        {{ 'selected' if sort_by == 'org'        }}>Sort: Organization</option>
       </select>
     </div>
 
-    <span class="counter" id="counter">{{ contacts|length }} contact{{ 's' if contacts|length != 1 }}</span>
-    <button class="btn-new" onclick="openNew()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <!-- The count changes as the filter runs, so it is announced. -->
+    <span class="counter" id="counter" role="status" aria-live="polite">{{ contacts|length }} contact{{ 's' if contacts|length != 1 }}</span>
+
+    <div class="toolbar-group">
+      <button class="btn-tool" id="btn-import" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Import
+      </button>
+      <a class="btn-tool" href="{{ url_for('export_contacts') }}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Export
+      </a>
+    </div>
+
+    <button class="btn-new" id="btn-new" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       New contact
     </button>
   </div>
 
-  <div class="contact-list" id="contact-list">
-    {% for contact in contacts %}
-    <div class="contact-item"
-      data-contact-id="{{ contact.id }}"
-      data-etag="{{ contact.etag | e }}"
-      data-name="{{ contact.name | e }}"
-      data-first-name="{{ contact.first_name | e }}"
-      data-last-name="{{ contact.last_name | e }}"
-      data-email="{{ contact.email | e }}"
-      data-phone="{{ contact.phone | e }}"
-      data-organization="{{ contact.org | e }}"
-      data-url="{{ contact.url | e }}"
-      data-birthday="{{ contact.birthday | e }}"
-      data-street="{{ contact.address.street | e if contact.address else '' }}"
-      data-city="{{ contact.address.city | e if contact.address else '' }}"
-      data-postal="{{ contact.address.postal | e if contact.address else '' }}"
-      data-country="{{ contact.address.country | e if contact.address else '' }}"
-      data-has-photo="{{ '1' if contact.photo else '0' }}">
+  <!-- Import submits straight from the file picker; no visible form needed. -->
+  <form id="import-form" method="POST" action="{{ url_for('import_contacts') }}" enctype="multipart/form-data" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" id="import-file" name="vcf" accept=".vcf,text/vcard">
+  </form>
 
-      {% if contact.photo %}
-      <img class="avatar" src="data:{{ contact.photo_mime }};base64,{{ contact.photo }}" alt="{{ contact.name | e }}">
-      {% else %}
-      <div class="avatar-initials">{{ contact.initials }}</div>
-      {% endif %}
+  <nav aria-label="Contacts">
+    <div class="contact-list" id="contact-list" role="list">
+      {% for contact in contacts %}
+      <div class="contact-item" role="listitem"
+        data-contact-id="{{ contact.id }}"
+        data-etag="{{ contact.etag | e }}"
+        data-name="{{ contact.name | e }}"
+        data-first-name="{{ contact.first_name | e }}"
+        data-last-name="{{ contact.last_name | e }}"
+        data-organization="{{ contact.org | e }}"
+        data-url="{{ contact.url | e }}"
+        data-birthday="{{ contact.birthday | e }}"
+        data-street="{{ contact.address.street | e if contact.address else '' }}"
+        data-city="{{ contact.address.city | e if contact.address else '' }}"
+        data-postal="{{ contact.address.postal | e if contact.address else '' }}"
+        data-country="{{ contact.address.country | e if contact.address else '' }}"
+        data-note="{{ contact.note | e }}"
+        data-emails='{{ contact.emails | tojson }}'
+        data-phones='{{ contact.phones | tojson }}'
+        data-has-photo="{{ '1' if contact.photo else '0' }}"
+        data-search="{{ contact.search | e }}">
 
-      <div class="contact-info">
-        <div class="contact-name">{{ contact.name }}</div>
-        {% if contact.org %}<div class="contact-org">{{ contact.org }}</div>{% endif %}
-        <div class="contact-meta">
-          {% if contact.email %}
-          <span class="meta-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>
-          </span>
-          {% endif %}
-          {% if contact.phone %}
-          <span class="meta-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.9v2.02z"/></svg>
-            {{ contact.phone }}
-          </span>
-          {% endif %}
-          {% if contact.birthday %}
-          <span class="meta-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            {{ contact.birthday }}
-          </span>
-          {% endif %}
-          {% if contact.address and (contact.address.city or contact.address.street) %}
-          <span class="meta-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            {{ contact.address.city }}{% if contact.address.street %}, {{ contact.address.street }}{% endif %}
-          </span>
-          {% endif %}
+        {% if contact.photo %}
+        <img class="avatar" src="data:{{ contact.photo_mime }};base64,{{ contact.photo }}" alt="">
+        {% else %}
+        <div class="avatar-initials" aria-hidden="true">{{ contact.initials }}</div>
+        {% endif %}
+
+        <div class="contact-info">
+          <div class="contact-name">{{ contact.name }}</div>
+          {% if contact.org %}<div class="contact-org">{{ contact.org }}</div>{% endif %}
+          <div class="contact-meta">
+            {% for item in contact.emails %}
+            <span class="meta-item">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <a href="mailto:{{ item.value }}">{{ item.value }}</a>{% if item.type %}<span class="sr-only"> ({{ item.type | lower }})</span>{% endif %}
+            </span>
+            {% endfor %}
+            {% for item in contact.phones %}
+            <span class="meta-item">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.9v2.02z"/></svg>
+              {{ item.value }}{% if item.type %}<span class="sr-only"> ({{ item.type | lower }})</span>{% endif %}
+            </span>
+            {% endfor %}
+            {% if contact.birthday %}
+            <span class="meta-item">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {{ contact.birthday }}
+            </span>
+            {% endif %}
+            {% if contact.address and (contact.address.city or contact.address.street) %}
+            <span class="meta-item">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {{ contact.address.city }}{% if contact.address.street %}, {{ contact.address.street }}{% endif %}
+            </span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="contact-actions">
+          <button class="btn-icon" data-action="edit" type="button" aria-label="Edit {{ contact.name | e }}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn-icon danger" data-action="delete" type="button" aria-label="Delete {{ contact.name | e }}">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+          </button>
         </div>
       </div>
-
-      <div class="contact-actions">
-        <button class="btn-icon" onclick="openEdit('{{ contact.id }}')" title="Edit">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <!-- Values are read off the row, not inlined: a name with an
-             apostrophe used to break this handler. -->
-        <button class="btn-icon danger" onclick="confirmDelete(this.closest('.contact-item'))" title="Delete">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
-        </button>
+      {% else %}
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <h3>No contacts yet</h3>
+        <p>Add your first contact to get started.</p>
       </div>
+      {% endfor %}
     </div>
-    {% else %}
-    <div class="empty-state">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <h3>No contacts yet</h3>
-      <p>Add your first contact to get started.</p>
-    </div>
-    {% endfor %}
-  </div>
+  </nav>
 </main>
 
 <!-- Contact modal -->
 <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
-  <div class="modal" onclick="event.stopPropagation()">
+  <div class="modal" id="modal-panel">
     <div class="modal-header">
       <span class="modal-title" id="modal-title-text">New contact</span>
-      <button class="modal-close" onclick="closeModal()" aria-label="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <button class="modal-close" id="modal-close" type="button" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
 
@@ -313,6 +393,7 @@
       <input type="hidden" id="contact-id" name="contact_id">
       <!-- The version of the card being edited, sent back as If-Match. -->
       <input type="hidden" id="contact-etag" name="etag">
+      <input type="hidden" id="remove-photo" name="remove_photo" value="">
 
       <div class="form-row">
         <div class="form-group">
@@ -330,20 +411,21 @@
         <input class="form-input" type="text" id="organization" name="organization" placeholder="Company">
       </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="email">Email</label>
-          <input class="form-input" type="email" id="email" name="email" placeholder="john@example.com">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="phone">Phone</label>
-          <input class="form-input" type="tel" id="phone" name="phone" placeholder="+1 555 000 0000">
-        </div>
+      <div class="form-group">
+        <span class="form-label" id="emails-label">Email addresses</span>
+        <div class="row-group" id="emails" role="group" aria-labelledby="emails-label"></div>
+        <button class="btn-add-row" type="button" data-add-row="emails">+ Add email</button>
+      </div>
+
+      <div class="form-group">
+        <span class="form-label" id="phones-label">Phone numbers</span>
+        <div class="row-group" id="phones" role="group" aria-labelledby="phones-label"></div>
+        <button class="btn-add-row" type="button" data-add-row="phones">+ Add phone</button>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="birthday">Birthday <span class="optional">dd/mm/yyyy</span></label>
+          <label class="form-label" for="birthday">Birthday <span class="optional">dd/mm/yyyy, or dd/mm</span></label>
           <input class="form-input" type="text" id="birthday" name="birthday" placeholder="31/12/1990">
         </div>
         <div class="form-group">
@@ -379,12 +461,15 @@
         <div class="form-group">
           <label class="form-label" for="photo">Photo</label>
           <div class="photo-zone">
-            <div id="photo-placeholder" class="photo-preview-placeholder">
+            <div id="photo-placeholder" class="photo-preview-placeholder" aria-hidden="true">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
-            <img id="photo-preview" class="photo-preview-img" alt="Photo preview">
-            <input class="form-input" type="file" id="photo" name="photo" accept="image/jpeg,image/png" style="flex:1">
+            <img id="photo-preview" class="photo-preview-img" alt="">
+            <input class="form-input" type="file" id="photo" name="photo" accept="image/jpeg,image/png,image/gif,image/webp" style="flex:1">
           </div>
+          <label class="photo-remove" id="photo-remove-wrap" hidden>
+            <input type="checkbox" id="photo-remove-box"> Remove the current photo
+          </label>
         </div>
         <div class="form-group">
           <label class="form-label" for="note">Notes</label>
@@ -393,7 +478,7 @@
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button type="button" class="btn-cancel" id="modal-cancel">Cancel</button>
         <button type="submit" class="btn-save">Save</button>
       </div>
     </form>
@@ -401,148 +486,407 @@
 </div>
 
 <!-- Delete confirm -->
-<div id="confirm-overlay" class="confirm-overlay">
+<div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
   <div class="confirm-box">
-    <h3>Delete contact?</h3>
+    <h3 id="confirm-title">Delete contact?</h3>
     <p id="confirm-name"></p>
     <div class="confirm-actions">
-      <button class="btn-cancel" onclick="closeConfirm()">Cancel</button>
-      <button class="btn-confirm-del" onclick="doDelete()">Delete</button>
+      <button class="btn-cancel" id="confirm-cancel" type="button">Cancel</button>
+      <button class="btn-confirm-del" id="confirm-delete" type="button">Delete</button>
     </div>
   </div>
 </div>
 
-<div id="delete-forms"></div>
-<div id="contact-data" data-total="{{ contacts|length }}" hidden></div>
+<!-- Keyboard shortcuts -->
+<div id="shortcuts-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+  <div class="modal" id="shortcuts-panel" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title" id="shortcuts-title">Keyboard shortcuts</span>
+      <button class="modal-close" id="shortcuts-close" type="button" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="shortcuts">
+      <kbd>/</kbd><span>Focus the search</span>
+      <kbd>N</kbd><span>New contact</span>
+      <kbd>Esc</kbd><span>Close a dialog, or clear the search</span>
+      <kbd>?</kbd><span>This list</span>
+    </div>
+  </div>
+</div>
 
-<script>
-const TOTAL = parseInt(document.getElementById('contact-data').dataset.total, 10);
-let pendingDeleteId = null;
-let pendingDeleteEtag = '';
+<!-- A row of a multi-valued field, cloned for each value. -->
+<template id="row-template">
+  <div class="value-row">
+    <select class="row-type" aria-label="Type"></select>
+    <input class="form-input" type="text">
+    <button class="btn-row-remove" type="button" data-remove-row aria-label="Remove this row">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+</template>
 
-// Sort — navigate with query param (server-side sort)
-function applySort(value) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('sort', value);
-  window.location.href = url.toString();
-}
+<div id="contact-data"
+     data-total="{{ contacts|length }}"
+     data-create-url="{{ url_for('contacts') }}"
+     data-update-url="{{ url_for('update_contact') }}"
+     data-csrf="{{ csrf_token() }}"
+     data-email-types='{{ email_types | list | tojson }}'
+     data-tel-types='{{ tel_types | list | tojson }}'
+     hidden></div>
 
-// Search
+<script nonce="{{ csp_nonce }}">
+'use strict';
+
+// Everything the page needs from the server travels in data attributes: the
+// Content-Security-Policy allows this one script by nonce and no inline event
+// handler at all, so nothing here may be built from a string.
+const DATA = document.getElementById('contact-data').dataset;
+const TOTAL = parseInt(DATA.total, 10);
+const EMAIL_TYPES = JSON.parse(DATA.emailTypes);
+const TEL_TYPES = JSON.parse(DATA.telTypes);
+
+const modalOverlay = document.getElementById('modal-overlay');
+const confirmOverlay = document.getElementById('confirm-overlay');
+const shortcutsOverlay = document.getElementById('shortcuts-overlay');
+const contactForm = document.getElementById('contact-form');
 const searchInput = document.getElementById('search');
 const counter = document.getElementById('counter');
-searchInput.addEventListener('input', function() {
-  const q = this.value.toLowerCase();
-  const items = document.querySelectorAll('#contact-list .contact-item');
-  let visible = 0;
-  items.forEach(el => {
-    const hay = [
-      el.dataset.name, el.dataset.firstName, el.dataset.lastName,
-      el.dataset.email, el.dataset.phone, el.dataset.organization,
-      el.dataset.url, el.dataset.street, el.dataset.city,
-      el.dataset.postal, el.dataset.country
-    ].join(' ').toLowerCase();
-    const show = !q || hay.includes(q);
-    el.style.display = show ? '' : 'none';
-    if (show) visible++;
-  });
-  counter.textContent = q
-    ? `${visible} / ${TOTAL} contact${TOTAL !== 1 ? 's' : ''}`
-    : `${TOTAL} contact${TOTAL !== 1 ? 's' : ''}`;
-});
+const rowTemplate = document.getElementById('row-template');
 
-// Modal
-function openNew() {
-  document.getElementById('modal-title-text').textContent = 'New contact';
-  document.getElementById('contact-form').reset();
-  document.getElementById('contact-form').action = "{{ url_for('contacts') }}";
-  document.getElementById('contact-id').value = '';
-  document.getElementById('contact-etag').value = '';
-  resetPhotoPreview();
-  document.getElementById('modal-overlay').classList.add('open');
-  document.getElementById('first_name').focus();
+let pendingDeleteId = null;
+let pendingDeleteEtag = '';
+// What had the focus before a dialog opened, so it can be given back.
+let focusBeforeDialog = null;
+
+// --- Dialogs ---------------------------------------------------------------
+
+function openDialog(overlay, focusTarget) {
+  focusBeforeDialog = document.activeElement;
+  overlay.classList.add('open');
+  if (focusTarget) focusTarget.focus();
 }
 
-function openEdit(contactId) {
-  const row = document.querySelector(`[data-contact-id="${contactId}"]`);
-  if (!row) return;
-  document.getElementById('modal-title-text').textContent = 'Edit contact';
-  document.getElementById('contact-form').action = "{{ url_for('update_contact') }}";
-  document.getElementById('contact-id').value = contactId;
-  document.getElementById('contact-etag').value = row.dataset.etag || '';
-  const map = {
-    first_name:'firstName', last_name:'lastName', email:'email', phone:'phone',
-    organization:'organization', url:'url', birthday:'birthday',
-    street:'street', city:'city', postal:'postal', country:'country', note:'note'
-  };
-  Object.entries(map).forEach(([id, key]) => {
-    const el = document.getElementById(id);
-    if (el) el.value = row.dataset[key] || '';
+function closeDialog(overlay) {
+  if (!overlay.classList.contains('open')) return;
+  overlay.classList.remove('open');
+  if (focusBeforeDialog && document.contains(focusBeforeDialog)) {
+    focusBeforeDialog.focus();
+  }
+  focusBeforeDialog = null;
+}
+
+function anyDialogOpen() {
+  return modalOverlay.classList.contains('open')
+    || confirmOverlay.classList.contains('open')
+    || shortcutsOverlay.classList.contains('open');
+}
+
+function closeAllDialogs() {
+  closeDialog(modalOverlay);
+  closeDialog(confirmOverlay);
+  closeDialog(shortcutsOverlay);
+  pendingDeleteId = null;
+  pendingDeleteEtag = '';
+}
+
+// --- Multi-valued rows -----------------------------------------------------
+
+function buildRow(group, entry) {
+  const types = group === 'emails' ? EMAIL_TYPES : TEL_TYPES;
+  const field = group === 'emails' ? 'email' : 'phone';
+  const row = rowTemplate.content.firstElementChild.cloneNode(true);
+
+  const select = row.querySelector('.row-type');
+  select.name = field + '_type';
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '—';
+  select.appendChild(blank);
+  types.forEach(function (type) {
+    const option = document.createElement('option');
+    option.value = type;
+    // HOME -> Home, without building any markup.
+    option.textContent = type.charAt(0) + type.slice(1).toLowerCase();
+    select.appendChild(option);
   });
-  resetPhotoPreview();
-  if (row.dataset.hasPhoto === '1') {
-    const img = row.querySelector('img.avatar');
-    if (img) {
-      document.getElementById('photo-preview').src = img.src;
-      document.getElementById('photo-preview').style.display = 'block';
-      document.getElementById('photo-placeholder').style.display = 'none';
+  select.value = (entry && entry.type) || '';
+
+  const input = row.querySelector('.form-input');
+  input.name = field;
+  // Deliberately not type="email": an odd address already on a card must not
+  // block an unrelated edit from being saved.
+  input.type = 'text';
+  input.inputMode = field === 'email' ? 'email' : 'tel';
+  input.placeholder = field === 'email' ? 'john@example.com' : '+1 555 000 0000';
+  input.setAttribute('aria-label', field === 'email' ? 'Email address' : 'Phone number');
+  input.value = (entry && entry.value) || '';
+
+  return row;
+}
+
+function fillRows(group, entries) {
+  const container = document.getElementById(group);
+  container.replaceChildren();
+  const list = (entries && entries.length) ? entries : [{ value: '', type: '' }];
+  list.forEach(function (entry) {
+    container.appendChild(buildRow(group, entry));
+  });
+}
+
+document.addEventListener('click', function (event) {
+  const addButton = event.target.closest('[data-add-row]');
+  if (addButton) {
+    const group = addButton.dataset.addRow;
+    const container = document.getElementById(group);
+    const row = buildRow(group, null);
+    container.appendChild(row);
+    row.querySelector('.form-input').focus();
+    return;
+  }
+
+  const removeButton = event.target.closest('[data-remove-row]');
+  if (removeButton) {
+    const container = removeButton.closest('.row-group');
+    const row = removeButton.closest('.value-row');
+    if (container.children.length > 1) {
+      row.remove();
+    } else {
+      // The last row is emptied rather than removed, so the field stays usable.
+      row.querySelector('.form-input').value = '';
+      row.querySelector('.row-type').value = '';
     }
   }
-  document.getElementById('modal-overlay').classList.add('open');
-  document.getElementById('first_name').focus();
+});
+
+// --- Search ----------------------------------------------------------------
+
+searchInput.addEventListener('input', function () {
+  const query = this.value.trim().toLowerCase();
+  const items = document.querySelectorAll('#contact-list .contact-item');
+  let visible = 0;
+  items.forEach(function (item) {
+    const show = !query || (item.dataset.search || '').includes(query);
+    item.hidden = !show;
+    if (show) visible++;
+  });
+  const plural = TOTAL !== 1 ? 's' : '';
+  counter.textContent = query
+    ? visible + ' / ' + TOTAL + ' contact' + plural
+    : TOTAL + ' contact' + plural;
+});
+
+// --- Sort ------------------------------------------------------------------
+
+document.getElementById('sort-select').addEventListener('change', function () {
+  const url = new URL(window.location.href);
+  url.searchParams.set('sort', this.value);
+  window.location.href = url.toString();
+});
+
+// --- Contact modal ---------------------------------------------------------
+
+function resetPhotoPreview() {
+  const preview = document.getElementById('photo-preview');
+  preview.style.display = 'none';
+  preview.removeAttribute('src');
+  document.getElementById('photo-placeholder').style.display = 'flex';
+  document.getElementById('photo-remove-wrap').hidden = true;
+  document.getElementById('photo-remove-box').checked = false;
+  document.getElementById('remove-photo').value = '';
 }
 
-function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
-document.getElementById('modal-overlay').addEventListener('click', closeModal);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeConfirm(); } });
+function openNew() {
+  document.getElementById('modal-title-text').textContent = 'New contact';
+  contactForm.reset();
+  contactForm.action = DATA.createUrl;
+  document.getElementById('contact-id').value = '';
+  document.getElementById('contact-etag').value = '';
+  fillRows('emails', null);
+  fillRows('phones', null);
+  resetPhotoPreview();
+  openDialog(modalOverlay, document.getElementById('first_name'));
+}
 
-document.getElementById('photo').addEventListener('change', function() {
+function openEdit(row) {
+  document.getElementById('modal-title-text').textContent = 'Edit contact';
+  contactForm.action = DATA.updateUrl;
+  document.getElementById('contact-id').value = row.dataset.contactId;
+  document.getElementById('contact-etag').value = row.dataset.etag || '';
+
+  const fields = {
+    first_name: 'firstName', last_name: 'lastName', organization: 'organization',
+    url: 'url', birthday: 'birthday', street: 'street', city: 'city',
+    postal: 'postal', country: 'country', note: 'note'
+  };
+  Object.keys(fields).forEach(function (id) {
+    const element = document.getElementById(id);
+    if (element) element.value = row.dataset[fields[id]] || '';
+  });
+
+  let emails = [];
+  let phones = [];
+  try { emails = JSON.parse(row.dataset.emails || '[]'); } catch (e) { emails = []; }
+  try { phones = JSON.parse(row.dataset.phones || '[]'); } catch (e) { phones = []; }
+  fillRows('emails', emails);
+  fillRows('phones', phones);
+
+  document.getElementById('photo').value = '';
+  resetPhotoPreview();
+  if (row.dataset.hasPhoto === '1') {
+    const avatar = row.querySelector('img.avatar');
+    if (avatar) {
+      const preview = document.getElementById('photo-preview');
+      preview.src = avatar.src;
+      preview.style.display = 'block';
+      document.getElementById('photo-placeholder').style.display = 'none';
+      document.getElementById('photo-remove-wrap').hidden = false;
+    }
+  }
+
+  openDialog(modalOverlay, document.getElementById('first_name'));
+}
+
+document.getElementById('btn-new').addEventListener('click', openNew);
+document.getElementById('modal-close').addEventListener('click', function () { closeDialog(modalOverlay); });
+document.getElementById('modal-cancel').addEventListener('click', function () { closeDialog(modalOverlay); });
+
+// A click on the backdrop closes; a click inside the panel must not.
+modalOverlay.addEventListener('click', function (event) {
+  if (event.target === modalOverlay) closeDialog(modalOverlay);
+});
+shortcutsOverlay.addEventListener('click', function (event) {
+  if (event.target === shortcutsOverlay) closeDialog(shortcutsOverlay);
+});
+
+document.getElementById('photo').addEventListener('change', function () {
   const file = this.files[0];
-  if (file && file.type.startsWith('image/')) {
+  if (file && file.type.indexOf('image/') === 0) {
     const reader = new FileReader();
-    reader.onload = e => {
-      document.getElementById('photo-preview').src = e.target.result;
-      document.getElementById('photo-preview').style.display = 'block';
+    reader.onload = function (event) {
+      const preview = document.getElementById('photo-preview');
+      preview.src = event.target.result;
+      preview.style.display = 'block';
       document.getElementById('photo-placeholder').style.display = 'none';
     };
     reader.readAsDataURL(file);
-  } else { resetPhotoPreview(); }
+    // Replacing the photo and removing it are mutually exclusive.
+    document.getElementById('photo-remove-box').checked = false;
+    document.getElementById('remove-photo').value = '';
+  }
 });
 
-function resetPhotoPreview() {
-  document.getElementById('photo-preview').style.display = 'none';
-  document.getElementById('photo-preview').src = '';
-  document.getElementById('photo-placeholder').style.display = 'flex';
-}
+document.getElementById('photo-remove-box').addEventListener('change', function () {
+  document.getElementById('remove-photo').value = this.checked ? '1' : '';
+  if (this.checked) {
+    document.getElementById('photo').value = '';
+    const preview = document.getElementById('photo-preview');
+    preview.style.display = 'none';
+    preview.removeAttribute('src');
+    document.getElementById('photo-placeholder').style.display = 'flex';
+  }
+});
 
-// Delete confirm
-function confirmDelete(row) {
+// --- Row actions (delegated, so no handler lives in the markup) ------------
+
+document.getElementById('contact-list').addEventListener('click', function (event) {
+  const button = event.target.closest('[data-action]');
+  if (!button) return;
+  const row = button.closest('.contact-item');
   if (!row) return;
-  pendingDeleteId = row.dataset.contactId;
-  pendingDeleteEtag = row.dataset.etag || '';
-  const name = row.dataset.name || 'This contact';
-  document.getElementById('confirm-name').textContent = `${name} will be permanently deleted.`;
-  document.getElementById('confirm-overlay').classList.add('open');
-}
-function closeConfirm() {
+
+  if (button.dataset.action === 'edit') {
+    openEdit(row);
+  } else if (button.dataset.action === 'delete') {
+    pendingDeleteId = row.dataset.contactId;
+    pendingDeleteEtag = row.dataset.etag || '';
+    const name = row.dataset.name || 'This contact';
+    document.getElementById('confirm-name').textContent = name + ' will be permanently deleted.';
+    openDialog(confirmOverlay, document.getElementById('confirm-cancel'));
+  }
+});
+
+document.getElementById('confirm-cancel').addEventListener('click', function () {
   pendingDeleteId = null;
   pendingDeleteEtag = '';
-  document.getElementById('confirm-overlay').classList.remove('open');
-}
-function doDelete() {
+  closeDialog(confirmOverlay);
+});
+
+document.getElementById('confirm-delete').addEventListener('click', function () {
   if (!pendingDeleteId) return;
   const form = document.createElement('form');
   form.method = 'POST';
-  form.action = `/contacts/${pendingDeleteId}/delete`;
+  form.action = DATA.createUrl.replace(/\/?$/, '/') + pendingDeleteId + '/delete';
+
   const csrf = document.createElement('input');
-  csrf.type = 'hidden'; csrf.name = 'csrf_token'; csrf.value = "{{ csrf_token() }}";
+  csrf.type = 'hidden';
+  csrf.name = 'csrf_token';
+  csrf.value = DATA.csrf;
   form.appendChild(csrf);
+
   // Delete only the version shown on this page.
   const etag = document.createElement('input');
-  etag.type = 'hidden'; etag.name = 'etag'; etag.value = pendingDeleteEtag;
+  etag.type = 'hidden';
+  etag.name = 'etag';
+  etag.value = pendingDeleteEtag;
   form.appendChild(etag);
-  document.getElementById('delete-forms').appendChild(form);
+
+  document.body.appendChild(form);
   form.submit();
+});
+
+// --- Import ----------------------------------------------------------------
+
+document.getElementById('btn-import').addEventListener('click', function () {
+  document.getElementById('import-file').click();
+});
+
+document.getElementById('import-file').addEventListener('change', function () {
+  if (this.files.length) document.getElementById('import-form').submit();
+});
+
+// --- Keyboard shortcuts ----------------------------------------------------
+
+function isTyping(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
 }
+
+document.addEventListener('keydown', function (event) {
+  // Escape always works, including from a field.
+  if (event.key === 'Escape') {
+    if (anyDialogOpen()) {
+      closeAllDialogs();
+    } else if (searchInput.value) {
+      searchInput.value = '';
+      searchInput.dispatchEvent(new Event('input'));
+    }
+    return;
+  }
+
+  // A single key never fires while typing, behind a dialog, or with a
+  // modifier it does not expect. Shift is left alone: some layouts need it
+  // for / and ?.
+  if (isTyping(event.target) || anyDialogOpen()) return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+  if (event.key === '/') {
+    event.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  } else if (event.key === 'n' || event.key === 'N') {
+    event.preventDefault();
+    openNew();
+  } else if (event.key === '?') {
+    event.preventDefault();
+    openDialog(shortcutsOverlay, document.getElementById('shortcuts-close'));
+  }
+});
+
+document.getElementById('shortcuts-close').addEventListener('click', function () {
+  closeDialog(shortcutsOverlay);
+});
 </script>
 </body>
 </html>

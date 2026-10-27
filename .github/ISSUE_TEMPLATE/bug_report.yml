@@ -1,0 +1,58 @@
+name: Bug report
+description: Something does not work as described.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not report a security vulnerability here — use private
+        reporting instead (see SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: GUIVCard version
+      description: The image tag, or the commit you built from.
+      placeholder: "tiritibambix/guivcard:latest, or a short SHA"
+    validations:
+      required: true
+  - type: input
+    id: carddav-server
+    attributes:
+      label: CardDAV server and version
+      placeholder: "Radicale 3.8.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: other-clients
+    attributes:
+      label: Do other clients sync this address book?
+      description: A contact written by a phone often explains a difference.
+      options:
+        - "No, only GUIVCard"
+        - "DAVx5 on Android"
+        - "Apple Contacts or iOS"
+        - "Thunderbird"
+        - "Something else"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Container logs
+      description: >
+        `docker compose logs app`. Remove anything you do not want public —
+        the app does not log passwords, but your contacts are yours.
+      render: shell
+  - type: checkboxes
+    id: data-loss
+    attributes:
+      label: Data
+      options:
+        - label: This involves a contact's data being changed or lost, and I have a backup of the address book.
