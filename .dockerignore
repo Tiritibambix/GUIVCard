@@ -1,0 +1,25 @@
+# The build context is sent to the builder for each target platform, so keep
+# out everything the image does not COPY. The Dockerfile names its sources
+# explicitly (app/app.py, app/templates, app/requirements.txt, static), so
+# nothing here changes the image's contents — only how much is shipped to
+# build it.
+
+.git
+.gitattributes
+.github
+.claude
+
+# Tests run in CI, not in the image.
+tests
+
+# Documentation and deployment samples.
+README.md
+LICENSE
+docker-compose.yml
+
+# Local Python artefacts, in case the app was ever run outside Docker.
+**/__pycache__
+**/*.py[cod]
+.venv
+venv
+.env
