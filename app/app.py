@@ -417,6 +417,11 @@ def normalize_photo(data: bytes) -> Tuple[bytes, str, str]:
             keeps_alpha = image.mode in ('RGBA', 'LA')
             image = image.convert('RGBA' if keeps_alpha else 'RGB')
             image.load()
+            # The JPEG encoder writes only what save() is given, but the PNG
+            # one falls back to im.info, so a transparent photo could carry
+            # its EXIF through. Drop it here rather than rely on the encoder.
+            for key in ('exif', 'xmp', 'XML:com.adobe.xmp', 'icc_profile', 'photoshop'):
+                image.info.pop(key, None)
     except Exception as e:
         logger.warning(f"Could not decode uploaded photo: {type(e).__name__}")
         raise ValueError(
@@ -429,7 +434,7 @@ def normalize_photo(data: bytes) -> Tuple[bytes, str, str]:
     smallest = None
     for dimension in (PHOTO_MAX_DIMENSION, 800, 640, 512, 400):
         candidate = image.copy()
-        candidate.thumbnail((dimension, dimension), Image.LANCZOS)
+        candidate.thumbnail((dimension, dimension), Image.Resampling.LANCZOS)
         qualities = (90, 80, 70) if fmt == 'JPEG' else (None,)
         for quality in qualities:
             buf = io.BytesIO()

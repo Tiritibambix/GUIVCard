@@ -328,31 +328,57 @@ def test_apple_birthday_keeps_its_form():
 # Photos
 # ---------------------------------------------------------------------------
 
-def make_image(width, height, mode='RGB', fmt='JPEG', orientation=None):
-    image = Image.new(mode, (width, height), (120, 160, 200) if mode == 'RGB' else (120, 160, 200, 255))
-    buf = io.BytesIO()
+def make_image(width, height, mode='RGB', fmt='JPEG', orientation=None, metadata=False):
+    """An image, optionally carrying the EXIF a camera would attach.
+
+    A nested IFD such as GPS cannot be assigned as a plain dict: Pillow types
+    tag 0x8825 as a LONG offset and fails to pack a dict into it. It has to go
+    through get_ifd(), and that is wrapped so a Pillow quirk breaks neither
+    fixture nor test.
+    """
+    fill = (120, 160, 200) if mode == 'RGB' else (120, 160, 200, 255)
+    image = Image.new(mode, (width, height), fill)
+
     kwargs = {}
-    if orientation is not None:
+    if orientation is not None or metadata:
         exif = Image.Exif()
-        exif[0x0112] = orientation          # Orientation
-        exif[0x010F] = 'TestCamera'         # Make
-        exif[0x8825] = {1: 'N', 2: ((48, 1), (51, 1), (0, 1))}  # GPS block
-        kwargs['exif'] = exif
-    buf_format = fmt
-    image.save(buf, format=buf_format, **kwargs)
+        if orientation is not None:
+            exif[0x0112] = orientation       # Orientation
+        if metadata:
+            exif[0x010F] = 'TestCamera'      # Make, an IFD0 string tag
+            exif[0x0110] = 'TestModel'       # Model
+            try:
+                gps = exif.get_ifd(0x8825)
+                gps[1] = 'N'                 # GPSLatitudeRef
+                gps[2] = ((48, 1), (51, 1), (0, 1))  # GPSLatitude
+            except Exception:
+                pass
+        kwargs['exif'] = exif.tobytes()
+
+    buf = io.BytesIO()
+    image.save(buf, format=fmt, **kwargs)
     return buf.getvalue()
+
+
+def exif_of(data: bytes) -> dict:
+    with Image.open(io.BytesIO(data)) as image:
+        return dict(image.getexif())
 
 
 def test_photo_metadata_is_stripped():
     print("\nAn uploaded photo loses its metadata")
-    original = make_image(800, 600, orientation=1)
-    check('original carries EXIF', b'Exif' in original, 'fixture has no EXIF')
+    original = make_image(800, 600, orientation=1, metadata=True)
+
+    # Confirm the fixture carries what the test claims to strip, so a broken
+    # fixture is reported as one rather than as a passing strip.
+    before = exif_of(original)
+    check('fixture carries EXIF', bool(before), before)
+    check('fixture carries the camera make', before.get(0x010F) == 'TestCamera', before.get(0x010F))
 
     normalized, vcard_type, mime = normalize_photo(original)
-    with Image.open(io.BytesIO(normalized)) as out:
-        exif = out.getexif()
-    check('no EXIF in the result', not dict(exif), dict(exif))
-    check('no GPS marker in the bytes', b'TestCamera' not in normalized)
+    check('no EXIF in the result', not exif_of(normalized), exif_of(normalized))
+    check('camera make gone from the bytes', b'TestCamera' not in normalized)
+    check('camera model gone from the bytes', b'TestModel' not in normalized)
     check('type is JPEG', (vcard_type, mime) == ('JPEG', 'image/jpeg'), (vcard_type, mime))
 
 
@@ -360,10 +386,13 @@ def test_photo_orientation_is_applied():
     print("\nA rotated photo is straightened")
     # Orientation 6 means "rotate 90 CW to display": 800x400 shows as 400x800.
     rotated = make_image(800, 400, orientation=6)
+    check('fixture carries orientation 6', exif_of(rotated).get(0x0112) == 6, exif_of(rotated))
+
     normalized, _, _ = normalize_photo(rotated)
     with Image.open(io.BytesIO(normalized)) as out:
         size = out.size
     check('width and height swapped', size == (400, 800), size)
+    check('orientation tag not carried over', not exif_of(normalized), exif_of(normalized))
 
 
 def test_photo_is_bounded():
