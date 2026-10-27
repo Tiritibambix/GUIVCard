@@ -57,12 +57,16 @@ prove anything about a real server or a real phone.**
 
 - **One address book per user.** The collection is fixed by `CARDDAV_URL`;
   there is no discovery and no way to switch or move a contact between books.
-- **No groups.** Neither group cards nor `CATEGORIES` are read or written. A
-  contact's existing group membership is preserved on save but invisible in
-  the UI.
+- **No groups.** Group cards are not read or written. `CATEGORIES` is shown in
+  the detail view, but read-only: a contact's existing group membership is
+  preserved on save and now visible, yet there is no way to change it here.
 - **One language.** English only.
 - **No photo cropping.** An uploaded photo is scaled to fit, never cropped.
-- **No contact detail view.** Everything happens in the list and a modal.
+- **The detail view is read-only beyond the editor's fields.** Everything a
+  card holds is shown, but only what the editor has an input for can be
+  changed. The rest is preserved, not editable.
+- **No focus trap in dialogs.** Focus is moved into a dialog when it opens and
+  given back when it closes, but `Tab` can still reach the page behind it.
 - **Import skips rather than merges.** A card whose UID is already present is
   left alone; there is no conflict resolution for a bulk import.
 

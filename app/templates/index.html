@@ -89,7 +89,7 @@
     .contact-item {
       display:flex; align-items:center; gap:14px;
       padding:14px 18px; border-bottom:1px solid var(--border);
-      transition:background .15s;
+      transition:background .15s; cursor:pointer;
     }
     .contact-item:last-child { border-bottom:none; }
     .contact-item:hover { background:var(--surface2); }
@@ -103,11 +103,26 @@
     }
 
     .contact-info { flex:1; min-width:0; }
-    .contact-name { font-size:.95rem; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .contact-org  { font-size:.78rem; color:var(--muted); margin-top:2px; }
 
-    .contact-meta { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px; }
-    .meta-item { font-size:.78rem; color:var(--muted); display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px; }
+    /* The row is a scannable line: name, organisation, one way to reach the
+       person. Everything else lives in the detail dialog. */
+    .contact-head { display:flex; align-items:baseline; gap:9px; min-width:0; }
+    .row-open {
+      background:none; border:none; padding:0; border-radius:6px; cursor:pointer;
+      font-family:'DM Sans',sans-serif; font-size:.95rem; font-weight:500; color:var(--text);
+      text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      transition:color .15s;
+    }
+    .contact-item:hover .row-open { color:var(--accent); }
+    .row-open:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    .contact-org  { font-size:.78rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .contact-primary { display:flex; align-items:center; gap:10px; margin-top:3px; min-width:0; }
+    .more-badge {
+      font-size:.7rem; color:var(--muted2); background:var(--surface2);
+      border:1px solid var(--border); border-radius:20px; padding:1px 7px; flex-shrink:0;
+    }
+
+    .meta-item { font-size:.78rem; color:var(--muted); display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
     .meta-item svg { flex-shrink:0; opacity:.5; }
     .meta-item a { color:var(--accent); text-decoration:none; }
     .meta-item a:hover { text-decoration:underline; }
@@ -136,7 +151,7 @@
 
     .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
     .modal-title { font-family:'DM Serif Display',serif; font-size:1.3rem; }
-    .modal-close { width:32px; height:32px; border-radius:8px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+    .modal-close { width:32px; height:32px; flex-shrink:0; border-radius:8px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; }
     .modal-close:hover { background:var(--surface2); color:var(--text); }
 
     .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
@@ -164,6 +179,53 @@
     .btn-save { background:var(--accent); border:none; border-radius:9px; padding:10px 24px; color:#fff; font-family:'DM Sans',sans-serif; font-size:.875rem; font-weight:500; cursor:pointer; transition:opacity .2s, transform .1s; }
     .btn-save:hover  { opacity:.88; }
     .btn-save:active { transform:scale(.97); }
+
+    /* Contact detail. Anchored to the top and sliding down from it, clear of
+       the 58px top bar, rather than growing out of the middle of the screen. */
+    .detail-overlay { align-items:flex-start; padding-top:76px; }
+    .detail-overlay.open .modal { animation:slideFromTop .24s cubic-bezier(.2,.8,.3,1); }
+    @keyframes slideFromTop { from{opacity:0;transform:translateY(-18px)} to{opacity:1;transform:translateY(0)} }
+    @media (prefers-reduced-motion: reduce) {
+      .modal-overlay.open, .detail-overlay.open .modal, .modal { animation:none; }
+    }
+
+    .detail-head { display:flex; align-items:center; gap:16px; min-width:0; }
+    .detail-head .avatar, .detail-head .avatar-initials { width:62px; height:62px; font-size:1.25rem; }
+    .detail-identity { min-width:0; }
+    .detail-name { font-family:'DM Serif Display',serif; font-size:1.35rem; line-height:1.25; overflow-wrap:anywhere; }
+    .detail-org  { font-size:.85rem; color:var(--muted); margin-top:3px; overflow-wrap:anywhere; }
+
+    .detail-list { display:grid; grid-template-columns:auto 1fr; gap:12px 18px; align-items:start; margin-top:22px; }
+    .detail-list dt {
+      font-size:.72rem; font-weight:600; color:var(--muted2);
+      text-transform:uppercase; letter-spacing:.08em; padding-top:3px; white-space:nowrap;
+    }
+    .detail-list dd { font-size:.9rem; min-width:0; overflow-wrap:anywhere; }
+    .detail-line { display:flex; align-items:baseline; gap:9px; }
+    .detail-line + .detail-line { margin-top:6px; }
+    .detail-line a { color:var(--accent); text-decoration:none; }
+    .detail-line a:hover { text-decoration:underline; }
+    .detail-type {
+      font-size:.68rem; color:var(--muted2); border:1px solid var(--border);
+      border-radius:20px; padding:1px 7px; flex-shrink:0; text-transform:lowercase;
+    }
+    .detail-empty { font-size:.85rem; color:var(--muted2); margin-top:22px; }
+    /* display:grid above would otherwise defeat the hidden attribute. */
+    .detail-list[hidden], .detail-extra[hidden] { display:none; }
+
+    .detail-extra { margin-top:24px; border-top:1px solid var(--border); padding-top:16px; }
+    .detail-extra summary { cursor:pointer; font-size:.8rem; color:var(--muted); }
+    .detail-extra summary:hover { color:var(--text); }
+    .detail-extra .detail-list { margin-top:14px; }
+    .detail-readonly { font-size:.72rem; color:var(--muted2); margin-top:12px; line-height:1.5; }
+
+    .detail-footer { justify-content:space-between; }
+    .btn-danger-outline {
+      background:transparent; border:1px solid rgba(255,107,107,.35); border-radius:9px;
+      padding:10px 18px; color:var(--danger); font-family:'DM Sans',sans-serif;
+      font-size:.875rem; cursor:pointer; transition:all .15s;
+    }
+    .btn-danger-outline:hover { background:var(--danger-dim); border-color:rgba(255,107,107,.6); }
 
     /* Delete confirm */
     .confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:300; }
@@ -317,6 +379,9 @@
       data-note="{{ contact.note | e }}"
       data-emails='{{ contact.emails | tojson }}'
       data-phones='{{ contact.phones | tojson }}'
+      data-addresses='{{ contact.addresses | tojson }}'
+      data-urls='{{ contact.urls | tojson }}'
+      data-extra='{{ contact.extra | tojson }}'
       data-has-photo="{{ '1' if contact.photo else '0' }}"
       data-search="{{ contact.search | e }}">
 
@@ -326,35 +391,31 @@
       <div class="avatar-initials" aria-hidden="true">{{ contact.initials }}</div>
       {% endif %}
 
+      {# One primary way to reach the person is shown; the rest is counted. #}
+      {% set extra_ways = contact.emails | length + contact.phones | length - 1 %}
       <div class="contact-info">
-        <div class="contact-name">{{ contact.name }}</div>
-        {% if contact.org %}<div class="contact-org">{{ contact.org }}</div>{% endif %}
-        <div class="contact-meta">
-          {% for item in contact.emails %}
+        <div class="contact-head">
+          <button class="row-open" type="button" data-action="open">{{ contact.name }}</button>
+          {% if contact.org %}<span class="contact-org">{{ contact.org }}</span>{% endif %}
+        </div>
+        {% if contact.email or contact.phone %}
+        <div class="contact-primary">
+          {% if contact.email %}
           <span class="meta-item">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            <a href="mailto:{{ item.value }}">{{ item.value }}</a>{% if item.type %}<span class="sr-only"> ({{ item.type | lower }})</span>{% endif %}
+            <a href="mailto:{{ contact.email }}">{{ contact.email }}</a>
           </span>
-          {% endfor %}
-          {% for item in contact.phones %}
+          {% else %}
           <span class="meta-item">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.9v2.02z"/></svg>
-            {{ item.value }}{% if item.type %}<span class="sr-only"> ({{ item.type | lower }})</span>{% endif %}
-          </span>
-          {% endfor %}
-          {% if contact.birthday %}
-          <span class="meta-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            {{ contact.birthday }}
+            {{ contact.phone }}
           </span>
           {% endif %}
-          {% if contact.address and (contact.address.city or contact.address.street) %}
-          <span class="meta-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            {{ contact.address.city }}{% if contact.address.street %}, {{ contact.address.street }}{% endif %}
-          </span>
+          {% if extra_ways > 0 %}
+          <span class="more-badge">+{{ extra_ways }}<span class="sr-only"> more ways to reach {{ contact.name }}</span></span>
           {% endif %}
         </div>
+        {% endif %}
       </div>
 
       <div class="contact-actions">
@@ -483,6 +544,42 @@
   </div>
 </div>
 
+<!-- Contact detail. Filled in by openDetail() from the row's data attributes,
+     so opening it costs no request. -->
+<div id="detail-overlay" class="modal-overlay detail-overlay" role="dialog" aria-modal="true" aria-labelledby="detail-name">
+  <div class="modal" id="detail-panel">
+    <div class="modal-header">
+      <div class="detail-head">
+        <div id="detail-avatar"></div>
+        <div class="detail-identity">
+          <div class="detail-name" id="detail-name"></div>
+          <div class="detail-org" id="detail-org"></div>
+        </div>
+      </div>
+      <button class="modal-close" id="detail-close" type="button" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <dl class="detail-list" id="detail-list"></dl>
+    <p class="detail-empty" id="detail-empty" hidden>Nothing else on this card.</p>
+
+    <details class="detail-extra" id="detail-extra" hidden>
+      <summary id="detail-extra-summary">Other fields on this card</summary>
+      <dl class="detail-list" id="detail-extra-list"></dl>
+      <p class="detail-readonly">
+        The editor cannot change these, but saving a contact keeps every one of
+        them exactly as the card held it.
+      </p>
+    </details>
+
+    <div class="modal-footer detail-footer">
+      <button type="button" class="btn-danger-outline" id="detail-delete">Delete</button>
+      <button type="button" class="btn-save" id="detail-edit">Edit</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delete confirm -->
 <div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
   <div class="confirm-box">
@@ -507,6 +604,7 @@
     <div class="shortcuts">
       <kbd>/</kbd><span>Focus the search</span>
       <kbd>N</kbd><span>New contact</span>
+      <kbd>Enter</kbd><span>Open the focused contact</span>
       <kbd>Esc</kbd><span>Close a dialog, or clear the search</span>
       <kbd>?</kbd><span>This list</span>
     </div>
@@ -547,6 +645,7 @@ const TEL_TYPES = JSON.parse(DATA.telTypes);
 const modalOverlay = document.getElementById('modal-overlay');
 const confirmOverlay = document.getElementById('confirm-overlay');
 const shortcutsOverlay = document.getElementById('shortcuts-overlay');
+const detailOverlay = document.getElementById('detail-overlay');
 const contactForm = document.getElementById('contact-form');
 const searchInput = document.getElementById('search');
 const counter = document.getElementById('counter');
@@ -574,16 +673,21 @@ function closeDialog(overlay) {
   focusBeforeDialog = null;
 }
 
+// Every overlay has to be listed here: this is what stops Esc from going to
+// the search box and what keeps the single-key shortcuts from firing behind an
+// open dialog.
 function anyDialogOpen() {
   return modalOverlay.classList.contains('open')
     || confirmOverlay.classList.contains('open')
-    || shortcutsOverlay.classList.contains('open');
+    || shortcutsOverlay.classList.contains('open')
+    || detailOverlay.classList.contains('open');
 }
 
 function closeAllDialogs() {
   closeDialog(modalOverlay);
   closeDialog(confirmOverlay);
   closeDialog(shortcutsOverlay);
+  closeDialog(detailOverlay);
   pendingDeleteId = null;
   pendingDeleteEtag = '';
 }
@@ -745,6 +849,181 @@ function openEdit(row) {
   openDialog(modalOverlay, document.getElementById('first_name'));
 }
 
+// --- Contact detail --------------------------------------------------------
+
+// The row the detail was opened from, so Edit and Delete can act on it.
+let detailRow = null;
+
+function readJson(row, key) {
+  try {
+    const parsed = JSON.parse(row.dataset[key] || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// One line of a group: the value, optionally as a link, with its type beside it.
+function detailLine(value, type, href) {
+  const line = document.createElement('div');
+  line.className = 'detail-line';
+
+  if (href) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.textContent = value;
+    line.appendChild(link);
+  } else {
+    const text = document.createElement('span');
+    text.textContent = value;
+    line.appendChild(text);
+  }
+
+  if (type) {
+    const badge = document.createElement('span');
+    badge.className = 'detail-type';
+    badge.textContent = type;
+    line.appendChild(badge);
+  }
+  return line;
+}
+
+// A <dt>/<dd> pair. Nothing is added for an empty group, so the dialog never
+// shows a label with nothing under it.
+function detailGroup(list, label, lines) {
+  if (!lines.length) return;
+  const term = document.createElement('dt');
+  term.textContent = label;
+  const definition = document.createElement('dd');
+  lines.forEach(function (line) { definition.appendChild(line); });
+  list.appendChild(term);
+  list.appendChild(definition);
+}
+
+// The postal address as a reader would write it, skipping missing parts.
+function addressLines(address) {
+  const lines = [];
+  const streetish = [address.box, address.extended, address.street].filter(Boolean).join(', ');
+  const locality = [address.postal, address.city].filter(Boolean).join(' ');
+  const region = [locality, address.region].filter(Boolean).join(', ');
+  [streetish, region, address.country].forEach(function (part) {
+    if (part) lines.push(part);
+  });
+  return lines;
+}
+
+function openDetail(row) {
+  detailRow = row;
+
+  document.getElementById('detail-name').textContent = row.dataset.name || 'No Name';
+  const org = document.getElementById('detail-org');
+  org.textContent = row.dataset.organization || '';
+  org.hidden = !row.dataset.organization;
+
+  // Reuse the photo the row already carries rather than encoding it again.
+  const avatarBox = document.getElementById('detail-avatar');
+  avatarBox.textContent = '';
+  const rowAvatar = row.querySelector('img.avatar');
+  if (rowAvatar) {
+    const image = document.createElement('img');
+    image.className = 'avatar';
+    image.src = rowAvatar.src;
+    image.alt = '';
+    avatarBox.appendChild(image);
+  } else {
+    const initials = document.createElement('div');
+    initials.className = 'avatar-initials';
+    initials.setAttribute('aria-hidden', 'true');
+    const source = row.querySelector('.avatar-initials');
+    initials.textContent = source ? source.textContent : '?';
+    avatarBox.appendChild(initials);
+  }
+
+  const list = document.getElementById('detail-list');
+  list.textContent = '';
+
+  detailGroup(list, 'Email', readJson(row, 'emails').map(function (item) {
+    return detailLine(item.value, (item.type || '').toLowerCase(), 'mailto:' + item.value);
+  }));
+
+  detailGroup(list, 'Phone', readJson(row, 'phones').map(function (item) {
+    return detailLine(item.value, (item.type || '').toLowerCase(), 'tel:' + item.value.replace(/[^+0-9]/g, ''));
+  }));
+
+  readJson(row, 'addresses').forEach(function (address) {
+    const parts = addressLines(address);
+    if (!parts.length) return;
+    detailGroup(list, 'Address', parts.map(function (part, index) {
+      return detailLine(part, index === 0 ? (address.type || '').toLowerCase() : '');
+    }));
+  });
+
+  // A card can hold any URL, including a javascript: one, so only http(s) is
+  // linked. A bare host gets https://; anything else is shown as plain text.
+  detailGroup(list, 'Website', readJson(row, 'urls').map(function (url) {
+    let href = '';
+    if (/^https?:\/\//i.test(url)) {
+      href = url;
+    } else if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+      href = 'https://' + url;
+    }
+    return detailLine(url, '', href);
+  }));
+
+  if (row.dataset.birthday) {
+    detailGroup(list, 'Birthday', [detailLine(row.dataset.birthday, '')]);
+  }
+  if (row.dataset.note) {
+    detailGroup(list, 'Notes', [detailLine(row.dataset.note, '')]);
+  }
+
+  list.hidden = !list.children.length;
+
+  // Everything the editor cannot write, kept out of the way but visible.
+  const extra = readJson(row, 'extra');
+  const extraBox = document.getElementById('detail-extra');
+  const extraList = document.getElementById('detail-extra-list');
+  extraList.textContent = '';
+  extra.forEach(function (field) {
+    detailGroup(extraList, field.label, [detailLine(field.value, '')]);
+  });
+  extraBox.hidden = !extra.length;
+  extraBox.open = false;
+  document.getElementById('detail-extra-summary').textContent =
+    'Other fields on this card (' + extra.length + ')';
+
+  document.getElementById('detail-empty').hidden = list.children.length > 0 || extra.length > 0;
+
+  openDialog(detailOverlay, document.getElementById('detail-close'));
+}
+
+document.getElementById('detail-close').addEventListener('click', function () {
+  closeDialog(detailOverlay);
+});
+
+detailOverlay.addEventListener('click', function (event) {
+  if (event.target === detailOverlay) closeDialog(detailOverlay);
+});
+
+// Closing first gives the focus back to the row's button, which openDialog
+// then captures, so focus still lands there when the next dialog closes.
+document.getElementById('detail-edit').addEventListener('click', function () {
+  const row = detailRow;
+  closeDialog(detailOverlay);
+  if (row) openEdit(row);
+});
+
+document.getElementById('detail-delete').addEventListener('click', function () {
+  const row = detailRow;
+  closeDialog(detailOverlay);
+  if (!row) return;
+  pendingDeleteId = row.dataset.contactId;
+  pendingDeleteEtag = row.dataset.etag || '';
+  document.getElementById('confirm-name').textContent =
+    (row.dataset.name || 'This contact') + ' will be permanently deleted.';
+  openDialog(confirmOverlay, document.getElementById('confirm-cancel'));
+});
+
 document.getElementById('btn-new').addEventListener('click', openNew);
 document.getElementById('modal-close').addEventListener('click', function () { closeDialog(modalOverlay); });
 document.getElementById('modal-cancel').addEventListener('click', function () { closeDialog(modalOverlay); });
@@ -789,11 +1068,22 @@ document.getElementById('photo-remove-box').addEventListener('change', function 
 
 document.getElementById('contact-list').addEventListener('click', function (event) {
   const button = event.target.closest('[data-action]');
-  if (!button) return;
+
+  // Without an action button, the whole row opens the detail — except on a
+  // link, so the mailto: address in a row still reaches the mail client.
+  if (!button) {
+    if (event.target.closest('a[href]')) return;
+    const clicked = event.target.closest('.contact-item');
+    if (clicked) openDetail(clicked);
+    return;
+  }
+
   const row = button.closest('.contact-item');
   if (!row) return;
 
-  if (button.dataset.action === 'edit') {
+  if (button.dataset.action === 'open') {
+    openDetail(row);
+  } else if (button.dataset.action === 'edit') {
     openEdit(row);
   } else if (button.dataset.action === 'delete') {
     pendingDeleteId = row.dataset.contactId;

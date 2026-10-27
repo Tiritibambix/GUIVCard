@@ -31,6 +31,7 @@ from app import (  # noqa: E402
     normalize_birthday_to_display,
     normalize_birthday_to_iso,
     normalize_photo,
+    parse_contacts_from_report,
     read_type,
     serialize_updated_vcard,
 )
@@ -583,6 +584,148 @@ def test_clearing_a_type_keeps_the_rest():
 
 
 # ---------------------------------------------------------------------------
+# The read path that feeds the list and the detail view
+# ---------------------------------------------------------------------------
+
+def report_for(*cards) -> bytes:
+    """A REPORT body shaped like the answer to an addressbook-query."""
+    responses = []
+    for index, card in enumerate(cards, start=1):
+        payload = (card.replace('&', '&amp;')
+                       .replace('<', '&lt;')
+                       .replace('>', '&gt;'))
+        responses.append(
+            '<D:response>'
+            f'<D:href>/u/contacts/card{index}.vcf</D:href>'
+            '<D:propstat><D:prop>'
+            f'<D:getetag>"etag-{index}"</D:getetag>'
+            f'<C:address-data>{payload}</C:address-data>'
+            '</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>'
+            '</D:response>'
+        )
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">'
+        + ''.join(responses) +
+        '</D:multistatus>'
+    )
+    return body.encode('utf-8')
+
+
+def parse_one(card):
+    """The parsed contact for a single card, or None if it was dropped."""
+    parsed = parse_contacts_from_report(report_for(card))
+    return parsed[0] if parsed else None
+
+
+def extra_values(contact, label):
+    """Every value the detail view would list under one label."""
+    return [field['value'] for field in contact['extra'] if field['label'] == label]
+
+
+def test_detail_sees_the_whole_card():
+    print("\nThe detail view is given every property the editor hides")
+    contact = parse_one(RICH_CARD)
+    check('the card was parsed', contact is not None)
+    if contact is None:
+        return
+
+    check('nickname', extra_values(contact, 'Nickname') == ['Jeannot'],
+          extra_values(contact, 'Nickname'))
+    check('job title', extra_values(contact, 'Job title') == ['Senior Engineer'],
+          extra_values(contact, 'Job title'))
+    check('role', extra_values(contact, 'Role') == ['Developer'],
+          extra_values(contact, 'Role'))
+    check('categories', 'Friends' in ''.join(extra_values(contact, 'Categories')),
+          extra_values(contact, 'Categories'))
+    check('instant messaging', 'jean@chat.example' in ''.join(extra_values(contact, 'Instant messaging')),
+          extra_values(contact, 'Instant messaging'))
+    # An extension keeps its own name rather than being renamed or dropped.
+    check('X-* under its own name', extra_values(contact, 'X-PHONETIC-FIRST-NAME') == ['Jahn'],
+          extra_values(contact, 'X-PHONETIC-FIRST-NAME'))
+
+    # Components of a structured value, which never appear as properties.
+    check('name prefix', extra_values(contact, 'Name prefix') == ['Dr.'],
+          extra_values(contact, 'Name prefix'))
+    check('middle name', extra_values(contact, 'Middle name') == ['Marie'],
+          extra_values(contact, 'Middle name'))
+    check('name suffix', extra_values(contact, 'Name suffix') == ['PhD'],
+          extra_values(contact, 'Name suffix'))
+    check('organisation units', extra_values(contact, 'Organisation unit') == ['R&D', 'Team 4'],
+          extra_values(contact, 'Organisation unit'))
+
+
+def test_detail_does_not_repeat_what_it_already_shows():
+    print("\nThe other-fields list repeats nothing shown above it")
+    contact = parse_one(RICH_CARD)
+    check('the card was parsed', contact is not None)
+    if contact is None:
+        return
+
+    labels = [field['label'] for field in contact['extra']]
+    for name in ('UID', 'VERSION', 'FN', 'N', 'ORG', 'EMAIL', 'TEL',
+                 'ADR', 'URL', 'BDAY', 'NOTE', 'PHOTO', 'REV'):
+        check(f'{name} not repeated', name not in labels, labels)
+
+
+def test_detail_address_keeps_every_component():
+    print("\nAn address comes back with all seven components")
+    contact = parse_one(RICH_CARD)
+    check('the card was parsed', contact is not None)
+    if contact is None:
+        return
+
+    check('one address', len(contact['addresses']) == 1, contact['addresses'])
+    address = contact['addresses'][0]
+    for key, expected in (('box', 'PoBox 42'), ('extended', 'Apt 7'),
+                          ('street', '1 rue de la Paix'), ('city', 'Paris'),
+                          ('region', 'Ile-de-France'), ('postal', '75001'),
+                          ('country', 'France')):
+        check(f'{key} kept', address[key] == expected, address[key])
+    check('type read', address['type'] == 'HOME', address['type'])
+
+    # The four keys the editor reads must stay exactly where it looks.
+    check('editor shape kept', contact['address'] == {
+        'street': '1 rue de la Paix', 'city': 'Paris',
+        'postal': '75001', 'country': 'France',
+    }, contact['address'])
+    check('first url kept for the editor', contact['url'] == 'https://example.org', contact['url'])
+    check('every url collected', contact['urls'] == ['https://example.org'], contact['urls'])
+
+
+def test_detail_values_are_bounded():
+    print("\nAn oversized value is truncated rather than embedded whole")
+    card = ("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Big\r\n"
+            "X-HUGE:" + 'a' * 1000 + "\r\nEND:VCARD\r\n")
+    contact = parse_one(card)
+    check('the card was parsed', contact is not None)
+    if contact is None:
+        return
+
+    found = extra_values(contact, 'X-HUGE')
+    check('one X-HUGE value', len(found) == 1, found)
+    if not found:
+        return
+    check('truncated to the cap', len(found[0]) <= 301, len(found[0]))
+    check('marked as truncated', found[0].endswith('…'), found[0][-5:])
+
+
+def test_search_haystack_covers_what_the_row_hides():
+    print("\nThe filter still reaches what moved into the detail view")
+    contact = parse_one(RICH_CARD)
+    check('the card was parsed', contact is not None)
+    if contact is None:
+        return
+
+    haystack = contact['search']
+    for needle in ('jean@acme.example', 'jean@home.example', 'jean.dupont@old.example',
+                   '+33600000001', '+33100000002', '+33100000003',
+                   'ile-de-france', 'pobox 42', 'apt 7', 'jeannot', 'jahn',
+                   'senior engineer'):
+        check(f'search covers {needle}', needle in haystack, haystack[:100])
+
+
+# ---------------------------------------------------------------------------
 # New and minimal cards
 # ---------------------------------------------------------------------------
 
@@ -664,6 +807,11 @@ def main():
         test_read_photo_type_detection,
         test_type_reading,
         test_clearing_a_type_keeps_the_rest,
+        test_detail_sees_the_whole_card,
+        test_detail_does_not_repeat_what_it_already_shows,
+        test_detail_address_keeps_every_component,
+        test_detail_values_are_bounded,
+        test_search_haystack_covers_what_the_row_hides,
         test_new_card_is_valid,
         test_a_name_is_required,
         test_minimal_card_still_saves,

@@ -691,6 +691,113 @@ def normalize_birthday_to_display(bday: str, omit_year: bool = False) -> str:
     return bday
 
 
+# Properties the detail view renders in a place of their own, so they must not
+# be repeated under "other fields". REV is bookkeeping, and X-APPLE-OMIT-YEAR
+# modifies BDAY rather than being a field in its own right.
+DETAIL_SHOWN_PROPERTIES = frozenset({
+    'version', 'prodid', 'uid', 'fn', 'n', 'org', 'email', 'tel', 'adr',
+    'url', 'bday', 'note', 'rev', 'x-apple-omit-year',
+})
+
+# Payloads that a list of text cannot usefully show.
+DETAIL_BINARY_PROPERTIES = frozenset({'photo', 'logo', 'sound', 'key'})
+
+# Readable names for what a card commonly carries beyond the fields the editor
+# manages. Anything missing here is shown under its own upper-case name, so an
+# X-* extension stays recognisable instead of being renamed or hidden.
+DETAIL_LABELS = {
+    'nickname': 'Nickname',
+    'title': 'Job title',
+    'role': 'Role',
+    'impp': 'Instant messaging',
+    'categories': 'Categories',
+    'geo': 'Coordinates',
+    'tz': 'Time zone',
+    'lang': 'Language',
+    'anniversary': 'Anniversary',
+    'related': 'Related',
+    'member': 'Group member',
+    'source': 'Source',
+    'kind': 'Kind',
+    'gender': 'Gender',
+    'x-phonetic-first-name': 'Phonetic first name',
+    'x-phonetic-last-name': 'Phonetic last name',
+}
+
+# The TYPE tokens shown beside an address. The editor does not manage them, so
+# this list only decides which one is worth labelling in the detail view.
+ADR_DISPLAY_TYPES = ('HOME', 'WORK', 'OTHER')
+
+# Any synced device can write these values, so they are bounded before being
+# embedded in the page.
+EXTRA_VALUE_MAX = 300
+EXTRA_MAX_ENTRIES = 40
+
+
+def _flatten_value(value) -> str:
+    """One readable line for a property value, structured or not.
+
+    Unlike _as_str, which keeps only the first element of a list, this joins
+    them: a component holding several values is shown in full rather than
+    silently truncated to its first.
+    """
+    if isinstance(value, (list, tuple)):
+        return ', '.join(text for text in (_flatten_value(v) for v in value) if text)
+    return _as_str(value).strip()
+
+
+def card_extra_fields(vobj) -> List[dict]:
+    """Everything on a card that the detail view does not show elsewhere.
+
+    The editor cannot write these, but a save keeps every one of them. Showing
+    them is the only way a person can tell they are still there.
+    """
+    extra: List[dict] = []
+
+    def add(label: str, value: str) -> None:
+        text = value.strip()
+        if not text or len(extra) >= EXTRA_MAX_ENTRIES:
+            return
+        if len(text) > EXTRA_VALUE_MAX:
+            text = text[:EXTRA_VALUE_MAX].rstrip() + '…'
+        extra.append({'label': label, 'value': text})
+
+    # Components of N and ORG that the editor does not expose. They belong to a
+    # structured value, so they never show up as properties of their own.
+    try:
+        name_line = _first(vobj, 'n')
+        if name_line is not None:
+            for attr, label in (('prefix', 'Name prefix'),
+                                ('additional', 'Middle name'),
+                                ('suffix', 'Name suffix')):
+                add(label, _flatten_value(getattr(name_line.value, attr, '')))
+    except Exception:
+        pass
+
+    try:
+        org = _first(vobj, 'org')
+        if org is not None:
+            units = org.value if isinstance(org.value, list) else [org.value]
+            if units and isinstance(units[0], list):
+                units = units[0]
+            for unit in units[1:]:
+                add('Organisation unit', _flatten_value(unit))
+    except Exception:
+        pass
+
+    for name, lines in sorted(vobj.contents.items()):
+        if name in DETAIL_SHOWN_PROPERTIES or name in DETAIL_BINARY_PROPERTIES:
+            continue
+        label = DETAIL_LABELS.get(name, name.upper())
+        for line in lines:
+            try:
+                add(label, _flatten_value(line.value))
+            except Exception:
+                continue
+
+    return extra
+
+
 def parse_contacts_from_report(response_content: bytes) -> list:
     from xml.etree import ElementTree
     contacts = []
@@ -742,7 +849,10 @@ def parse_contacts_from_report(response_content: bytes) -> list:
             'email': '', 'phone': '', 'org': '',
             'emails': [], 'phones': [],
             'url': '', 'birthday': '', 'note': '',
-            'photo': None, 'photo_mime': 'image/jpeg', 'address': None
+            'photo': None, 'photo_mime': 'image/jpeg', 'address': None,
+            # The detail view shows the whole card; 'address' and 'url' above
+            # stay as they are because the editor reads them.
+            'addresses': [], 'urls': [], 'extra': [],
         }
 
         try:
@@ -789,8 +899,14 @@ def parse_contacts_from_report(response_content: bytes) -> list:
             pass
 
         try:
-            if 'url' in vcard_data.contents:
-                contact['url'] = vcard_data.url.value.strip('<>')
+            contact['urls'] = [
+                text.strip('<>')
+                for text in (_flatten_value(line.value)
+                             for line in vcard_data.contents.get('url', []))
+                if text
+            ]
+            if contact['urls']:
+                contact['url'] = contact['urls'][0]
         except Exception:
             pass
 
@@ -821,17 +937,40 @@ def parse_contacts_from_report(response_content: bytes) -> list:
         except Exception:
             pass
 
+        # Every address, with all seven components. The editor writes only the
+        # four it shows, but it preserves the rest, so the detail view reads
+        # them all back.
+        for line in vcard_data.contents.get('adr', []):
+            # Per address, so one malformed one does not cost the others.
+            try:
+                value = line.value
+                contact['addresses'].append({
+                    'type': read_type(line, ADR_DISPLAY_TYPES),
+                    'box': _flatten_value(getattr(value, 'box', '')),
+                    'extended': _flatten_value(getattr(value, 'extended', '')),
+                    'street': _flatten_value(getattr(value, 'street', '')),
+                    'city': _flatten_value(getattr(value, 'city', '')),
+                    'region': _flatten_value(getattr(value, 'region', '')),
+                    'postal': _flatten_value(getattr(value, 'code', '')),
+                    'country': _flatten_value(getattr(value, 'country', '')),
+                })
+            except Exception:
+                continue
+
+        # The shape the editor reads, kept unchanged.
+        if contact['addresses']:
+            first = contact['addresses'][0]
+            contact['address'] = {
+                'street': first['street'],
+                'city': first['city'],
+                'postal': first['postal'],
+                'country': first['country'],
+            }
+
         try:
-            if 'adr' in vcard_data.contents:
-                adr = vcard_data.adr.value
-                contact['address'] = {
-                    'street': adr.street or '',
-                    'city': adr.city or '',
-                    'postal': adr.code or '',
-                    'country': adr.country or ''
-                }
-        except Exception:
-            pass
+            contact['extra'] = card_extra_fields(vcard_data)
+        except Exception as e:
+            logger.warning(f"Could not read the extra fields of {href}: {type(e).__name__}")
 
         # Compute initials from already-normalised string fields
         fi = _as_str(contact['first_name'])[:1]
@@ -846,11 +985,12 @@ def parse_contacts_from_report(response_content: bytes) -> list:
         ]
         haystack += [e['value'] for e in contact['emails']]
         haystack += [p['value'] for p in contact['phones']]
-        if contact['address']:
-            haystack += [
-                contact['address']['street'], contact['address']['city'],
-                contact['address']['postal'], contact['address']['country'],
-            ]
+        haystack += contact['urls']
+        # The filter has to reach what the row no longer shows: every address
+        # component, and every property the detail view lists.
+        for address in contact['addresses']:
+            haystack += [v for k, v in address.items() if k != 'type']
+        haystack += [field['value'] for field in contact['extra']]
         contact['search'] = ' '.join(_as_str(v) for v in haystack if v).lower()
 
         contacts.append(contact)

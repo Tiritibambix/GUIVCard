@@ -42,6 +42,8 @@ A clean, dark-themed web interface for managing contacts stored on a [Radicale](
 ### Contact management
 - **Create** contacts with first name, last name (optional), organization, website, birthday, address, notes, and photo
 - **Several emails and phone numbers** per contact, each with a type (home, work, mobile, fax…)
+- **Open a contact** to see the whole card in a dialog that slides down from the top: every email and phone with its type, the full postal address, website, birthday and notes
+- **Including what the editor cannot change.** Under *Other fields on this card*: `NICKNAME`, `TITLE`, `ROLE`, `IMPP`, `CATEGORIES`, custom `X-*` extensions, the components of `N` and `ORG` the form does not show. They are read-only there — but that is the point: the app keeps them, and now you can see that it does
 - **Edit** contacts in a modal — existing photo preserved unless a new one is uploaded or explicitly removed
 - **Delete** contacts with a confirmation dialog
 - **Import and export** `.vcf` files. Export writes the cards exactly as the server stored them; import skips a card whose UID is already present rather than overwriting it
@@ -57,7 +59,8 @@ A clean, dark-themed web interface for managing contacts stored on a [Radicale](
 - Transparency is kept by storing as PNG; everything else becomes JPEG
 
 ### Browse & sort
-- Live search across name, email, phone, organization, address fields — no page reload
+- One line per contact: name, organization, and one way to reach them, with a `+N` badge for the rest. Uniform rows, so the list can be scanned
+- Live search across every field the card holds — name, emails, phones, organization, address components, and the properties only the detail view shows — no page reload
 - Sort by **first name**, **last name**, or **organization** — preference persisted across actions
 - Empty fields pushed to the bottom on all sort modes
 - Contact counter updates in real time while filtering
@@ -66,7 +69,7 @@ A clean, dark-themed web interface for managing contacts stored on a [Radicale](
 - Dark theme, custom CSS — no CDN dependency
 - Avatar with initials fallback when no photo is available
 - Flash messages colored by type: green for success, red for error
-- Keyboard shortcuts: `/` focuses the search, `N` opens a new contact, `Esc` closes a dialog or clears the search, `?` lists them. A single key never fires while you are typing
+- Keyboard shortcuts: `/` focuses the search, `N` opens a new contact, `Enter` opens the focused contact, `Esc` closes a dialog or clears the search, `?` lists them. A single key never fires while you are typing
 - Accessibility: labels on every input, ARIA roles on dialogs, list semantics on the contact list, the result count announced as it changes, and the focus returned to whatever opened a dialog. This has **not** been audited with a screen reader or an automated checker — see [compatibility](docs/compatibility.md)
 
 ### Security headers
