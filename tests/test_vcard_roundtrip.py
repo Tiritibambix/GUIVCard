@@ -13,7 +13,9 @@ No test framework needed — run it directly:
 
 import io
 import os
+import struct
 import sys
+import traceback
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'app'))
 
@@ -328,32 +330,86 @@ def test_apple_birthday_keeps_its_form():
 # Photos
 # ---------------------------------------------------------------------------
 
-def make_image(width, height, mode='RGB', fmt='JPEG', orientation=None, metadata=False):
-    """An image, optionally carrying the EXIF a camera would attach.
+# The fixture writes its EXIF itself, as plain big-endian TIFF bytes, rather
+# than through Image.Exif. Pillow's writer cannot serialise a nested IFD such
+# as GPS: assigning a dict to tag 0x8825 fails because the tag is typed as a
+# LONG offset, and routing it through get_ifd() only moves the failure from
+# the assignment into tobytes(). Hand-packed bytes are deterministic and
+# independent of the Pillow version, so the fixture cannot be the thing that
+# breaks. Pillow's JPEG encoder writes an exif= bytes argument into APP1 as
+# given, which is what a camera would have produced.
 
-    A nested IFD such as GPS cannot be assigned as a plain dict: Pillow types
-    tag 0x8825 as a LONG offset and fails to pack a dict into it. It has to go
-    through get_ifd(), and that is wrapped so a Pillow quirk breaks neither
-    fixture nor test.
+EXIF_ASCII, EXIF_SHORT, EXIF_LONG, EXIF_RATIONAL = 2, 3, 4, 5
+
+
+def pack_ifd(entries, base_offset):
+    """Serialise one TIFF IFD placed at base_offset, with its data area.
+
+    Each entry is (tag, type, count, value). An int value is stored inline in
+    the entry's 4-byte field; a bytes value goes in the data area and is
+    referenced by offset, unless it is short enough to fit inline.
     """
+    entries = sorted(entries, key=lambda entry: entry[0])   # IFD tags are ordered
+    directory = struct.pack('>H', len(entries))
+    data_start = base_offset + 2 + 12 * len(entries) + 4
+    data = b''
+
+    for tag, kind, count, value in entries:
+        if isinstance(value, bytes):
+            if len(value) <= 4:
+                field = value.ljust(4, b'\x00')
+            else:
+                field = struct.pack('>I', data_start + len(data))
+                data += value + (b'\x00' if len(value) % 2 else b'')
+        elif kind == EXIF_SHORT:
+            field = struct.pack('>HH', value, 0)            # left-aligned in the field
+        else:
+            field = struct.pack('>I', value)
+        directory += struct.pack('>HHI', tag, kind, count) + field
+
+    return directory + struct.pack('>I', 0) + data
+
+
+def exif_bytes(orientation=None, make=None, model=None, gps=False):
+    """A TIFF block of the kind a phone camera puts in a photo's APP1 segment."""
+    ifd0 = []
+    if orientation is not None:
+        ifd0.append((0x0112, EXIF_SHORT, 1, orientation))
+    if make is not None:
+        ifd0.append((0x010F, EXIF_ASCII, len(make) + 1, make.encode('ascii') + b'\x00'))
+    if model is not None:
+        ifd0.append((0x0110, EXIF_ASCII, len(model) + 1, model.encode('ascii') + b'\x00'))
+
+    gps_ifd = b''
+    if gps:
+        # The GPS directory sits after IFD0, so IFD0 is packed twice: the first
+        # pass only measures it. Its length cannot change between the two,
+        # because the offset is stored inline in a fixed 4-byte field.
+        ifd0.append((0x8825, EXIF_LONG, 1, 0))
+        gps_offset = 8 + len(pack_ifd(ifd0, 8))
+        ifd0[-1] = (0x8825, EXIF_LONG, 1, gps_offset)
+        gps_ifd = pack_ifd([
+            (0x0001, EXIF_ASCII, 2, b'N\x00'),                                   # GPSLatitudeRef
+            (0x0002, EXIF_RATIONAL, 3, struct.pack('>6I', 48, 1, 51, 1, 0, 1)),  # GPSLatitude
+        ], gps_offset)
+
+    # 'MM' big-endian, magic 42, then the offset of IFD0.
+    return b'MM\x00\x2a\x00\x00\x00\x08' + pack_ifd(ifd0, 8) + gps_ifd
+
+
+def make_image(width, height, mode='RGB', fmt='JPEG', orientation=None, metadata=False):
+    """An image, optionally carrying the EXIF a camera would attach."""
     fill = (120, 160, 200) if mode == 'RGB' else (120, 160, 200, 255)
     image = Image.new(mode, (width, height), fill)
 
     kwargs = {}
     if orientation is not None or metadata:
-        exif = Image.Exif()
-        if orientation is not None:
-            exif[0x0112] = orientation       # Orientation
-        if metadata:
-            exif[0x010F] = 'TestCamera'      # Make, an IFD0 string tag
-            exif[0x0110] = 'TestModel'       # Model
-            try:
-                gps = exif.get_ifd(0x8825)
-                gps[1] = 'N'                 # GPSLatitudeRef
-                gps[2] = ((48, 1), (51, 1), (0, 1))  # GPSLatitude
-            except Exception:
-                pass
-        kwargs['exif'] = exif.tobytes()
+        kwargs['exif'] = exif_bytes(
+            orientation=orientation,
+            make='TestCamera' if metadata else None,
+            model='TestModel' if metadata else None,
+            gps=metadata,
+        )
 
     buf = io.BytesIO()
     image.save(buf, format=fmt, **kwargs)
@@ -374,9 +430,12 @@ def test_photo_metadata_is_stripped():
     before = exif_of(original)
     check('fixture carries EXIF', bool(before), before)
     check('fixture carries the camera make', before.get(0x010F) == 'TestCamera', before.get(0x010F))
+    check('fixture carries a GPS block', 0x8825 in before, sorted(before))
 
     normalized, vcard_type, mime = normalize_photo(original)
-    check('no EXIF in the result', not exif_of(normalized), exif_of(normalized))
+    after = exif_of(normalized)
+    check('no EXIF in the result', not after, after)
+    check('no GPS block in the result', 0x8825 not in after, sorted(after))
     check('camera make gone from the bytes', b'TestCamera' not in normalized)
     check('camera model gone from the bytes', b'TestModel' not in normalized)
     check('type is JPEG', (vcard_type, mime) == ('JPEG', 'image/jpeg'), (vcard_type, mime))
@@ -577,6 +636,9 @@ def main():
             test()
         except Exception as e:  # a crash is a failure, not an interruption
             print(f"  FAIL {test.__name__} raised {type(e).__name__}: {e}")
+            # Print the traceback too: without it, a crash in CI says only
+            # which test died, which costs a whole run to locate.
+            traceback.print_exc()
             FAILURES.append(test.__name__)
 
     print()
