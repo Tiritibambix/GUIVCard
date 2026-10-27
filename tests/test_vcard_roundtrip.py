@@ -640,9 +640,15 @@ def test_detail_sees_the_whole_card():
           extra_values(contact, 'Categories'))
     check('instant messaging', 'jean@chat.example' in ''.join(extra_values(contact, 'Instant messaging')),
           extra_values(contact, 'Instant messaging'))
-    # An extension keeps its own name rather than being renamed or dropped.
-    check('X-* under its own name', extra_values(contact, 'X-PHONETIC-FIRST-NAME') == ['Jahn'],
-          extra_values(contact, 'X-PHONETIC-FIRST-NAME'))
+    # An extension is never dropped. A known one gets a readable label; one the
+    # app has never heard of keeps its own name, so nothing is hidden behind a
+    # guess at what it means.
+    check('known X-* gets a readable label',
+          extra_values(contact, 'Phonetic first name') == ['Jahn'],
+          extra_values(contact, 'Phonetic first name'))
+    check('unknown X-* keeps its own name',
+          extra_values(contact, 'X-CUSTOM-FIELD') == ['keep me'],
+          extra_values(contact, 'X-CUSTOM-FIELD'))
 
     # Components of a structured value, which never appear as properties.
     check('name prefix', extra_values(contact, 'Name prefix') == ['Dr.'],
