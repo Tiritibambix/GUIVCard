@@ -64,11 +64,34 @@ jobs:
           pip-audit -r requirements.txt"
 
 
+  test:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r app/requirements.txt
+
+      - name: Check that the app imports
+        run: python -c "import sys; sys.path.insert(0, 'app'); import app"
+
+      - name: vCard round-trip tests
+        run: python tests/test_vcard_roundtrip.py
+
   build-and-push:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    needs: [setup, audit]
+    needs: [setup, audit, test]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

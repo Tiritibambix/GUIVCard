@@ -27,4 +27,8 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "60", "app:app"]
+# A single worker, with threads for concurrency: sessions are held in the
+# process's memory, so a second worker would not see them and every other
+# request would bounce the user back to the login page. The work is all
+# waiting on the CardDAV server, so threads cover it.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "8", "--timeout", "60", "app:app"]

@@ -35,14 +35,17 @@ A clean, dark-themed web interface for managing contacts stored on a [Radicale](
 - Login with your Radicale credentials (username + password)
 - Authentication verified via `PROPFIND` against your CardDAV collection — no separate user store
 - Multi-user: each user accesses only their own address book, isolated by URL (`{username}` placeholder)
-- CSRF protection on all state-changing requests
-- Flask session secured with a configurable `SECRET_KEY`
+- **Your password never reaches your browser.** It stays in the app's memory for the session; the browser holds only an opaque, `HttpOnly`, `SameSite=Strict` session cookie
+- Sessions end after 12 hours idle, 7 days at most, on sign-out, or when the container restarts
+- CSRF protection on all state-changing requests, with a fresh token on each sign-in
 
 ### Contact management
 - **Create** contacts with first name, last name (optional), organization, email, phone, website, birthday, address, notes, and photo
 - **Edit** contacts in a modal — existing photo preserved unless a new one is uploaded
 - **Delete** contacts with a confirmation dialog
-- vCard 3.0 generation with proper RFC-compliant escaping
+- **Nothing you can't see is lost.** Saving a contact keeps every property the editor doesn't show — additional emails and phone numbers, their `TYPE` parameters, group memberships, `NICKNAME`, `TITLE`, `IMPP`, custom `X-*` fields. Only the fields on the form are rewritten
+- **No silent overwrites.** Every write carries `If-Match`, so a contact changed on your phone since the page loaded is reported as a conflict instead of being overwritten
+- vCard 3.0, serialized with `vobject` for RFC-compliant escaping
 
 ### Browse & sort
 - Live search across name, email, phone, organization, address fields — no page reload
@@ -57,10 +60,11 @@ A clean, dark-themed web interface for managing contacts stored on a [Radicale](
 - Fully accessible: labels on all inputs, ARIA roles on dialogs, keyboard navigation (Escape closes modals)
 
 ### Infrastructure
-- Runs on **gunicorn** (production WSGI server) — no Flask dev server warning
+- Runs on **gunicorn** (production WSGI server) — no Flask dev server warning. One worker with 8 threads, since sessions live in the process's memory
 - Docker image published on Docker Hub: `tiritibambix/guivcard`
 - Multi-architecture builds: `linux/amd64`, `linux/arm64`
 - Dependency security audit via `pip-audit` on every push
+- vCard round-trip tests gate the image build, so a save can never start dropping fields unnoticed
 - GitHub Actions CI with explicit `GITHUB_TOKEN` permission scoping
 
 ---
@@ -96,10 +100,11 @@ docker compose up -d
 
 ## Environment variables
 
-| Variable       | Required | Description                                                                               |
-|----------------|----------|-------------------------------------------------------------------------------------------|
-| `SECRET_KEY`   | Yes      | Flask session signing key. Generate once and keep stable across restarts.                 |
-| `CARDDAV_URL`  | Yes      | CardDAV collection URL. Supports `{username}` placeholder for multi-user setups.          |
+| Variable         | Required | Description                                                                                                  |
+|------------------|----------|--------------------------------------------------------------------------------------------------------------|
+| `SECRET_KEY`     | Yes      | Flask session signing key. Generate once and keep stable across restarts.                                    |
+| `CARDDAV_URL`    | Yes      | CardDAV collection URL. Supports `{username}` placeholder for multi-user setups.                             |
+| `SECURE_COOKIES` | No       | Set to `true` to mark the session cookie `Secure`. Turn it on behind an HTTPS reverse proxy; leave it off for the plain-HTTP quick start, or sign-in will not work. |
 
 ---
 
@@ -137,6 +142,12 @@ cd GUIVCard
 pip install -r app/requirements.txt
 export SECRET_KEY=dev CARDDAV_URL=http://localhost:5232/{username}/contacts/
 python app/app.py
+```
+
+Run the vCard tests — they need no server and no test framework:
+
+```bash
+python tests/test_vcard_roundtrip.py
 ```
 
 ---
