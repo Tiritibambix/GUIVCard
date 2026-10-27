@@ -336,8 +336,7 @@ def test_apple_birthday_keeps_its_form():
 # LONG offset, and routing it through get_ifd() only moves the failure from
 # the assignment into tobytes(). Hand-packed bytes are deterministic and
 # independent of the Pillow version, so the fixture cannot be the thing that
-# breaks. Pillow's JPEG encoder writes an exif= bytes argument into APP1 as
-# given, which is what a camera would have produced.
+# breaks.
 
 EXIF_ASCII, EXIF_SHORT, EXIF_LONG, EXIF_RATIONAL = 2, 3, 4, 5
 
@@ -397,28 +396,63 @@ def exif_bytes(orientation=None, make=None, model=None, gps=False):
     return b'MM\x00\x2a\x00\x00\x00\x08' + pack_ifd(ifd0, 8) + gps_ifd
 
 
-def make_image(width, height, mode='RGB', fmt='JPEG', orientation=None, metadata=False):
-    """An image, optionally carrying the EXIF a camera would attach."""
-    fill = (120, 160, 200) if mode == 'RGB' else (120, 160, 200, 255)
-    image = Image.new(mode, (width, height), fill)
-
-    kwargs = {}
-    if orientation is not None or metadata:
-        kwargs['exif'] = exif_bytes(
-            orientation=orientation,
-            make='TestCamera' if metadata else None,
-            model='TestModel' if metadata else None,
-            gps=metadata,
-        )
-
-    buf = io.BytesIO()
-    image.save(buf, format=fmt, **kwargs)
-    return buf.getvalue()
-
-
 def exif_of(data: bytes) -> dict:
     with Image.open(io.BytesIO(data)) as image:
         return dict(image.getexif())
+
+
+def gps_of(data: bytes) -> dict:
+    """The GPS sub-directory, which Pillow exposes separately from IFD0."""
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            return dict(image.getexif().get_ifd(0x8825))
+    except Exception:
+        return {}
+
+
+def make_image(width, height, mode='RGB', fmt='JPEG', orientation=None, metadata=False):
+    """An image, optionally carrying the EXIF a camera would attach.
+
+    How the block has to be framed depends on the container: JPEG takes the
+    APP1 payload, which begins with the "Exif\\0\\0" prefix that
+    Image.Exif.tobytes() emits, while PNG's eXIf chunk takes the bare TIFF
+    block. Rather than depend on which of the two a given Pillow version
+    accepts, both framings are written and the one that reads back is kept —
+    so a fixture that carries no metadata can no longer be mistaken for a
+    pipeline that stripped it.
+    """
+    fill = (120, 160, 200) if mode == 'RGB' else (120, 160, 200, 255)
+    image = Image.new(mode, (width, height), fill)
+
+    if orientation is None and not metadata:
+        buf = io.BytesIO()
+        image.save(buf, format=fmt)
+        return buf.getvalue()
+
+    tiff = exif_bytes(
+        orientation=orientation,
+        make='TestCamera' if metadata else None,
+        model='TestModel' if metadata else None,
+        gps=metadata,
+    )
+
+    fallback = None
+    for blob in (b'Exif\x00\x00' + tiff, tiff):
+        buf = io.BytesIO()
+        try:
+            image.save(buf, format=fmt, exif=blob)
+            encoded = buf.getvalue()
+            readable = bool(exif_of(encoded))
+        except Exception:
+            continue          # a framing this Pillow rejects: try the other
+        if readable:
+            return encoded
+        if fallback is None:
+            fallback = encoded
+
+    # Neither framing took. Return what there is, so the test reports it as a
+    # fixture that carries no EXIF instead of raising.
+    return fallback if fallback is not None else make_image(width, height, mode, fmt)
 
 
 def test_photo_metadata_is_stripped():
@@ -430,12 +464,14 @@ def test_photo_metadata_is_stripped():
     before = exif_of(original)
     check('fixture carries EXIF', bool(before), before)
     check('fixture carries the camera make', before.get(0x010F) == 'TestCamera', before.get(0x010F))
-    check('fixture carries a GPS block', 0x8825 in before, sorted(before))
+    check('fixture carries a GPS block', 0x8825 in before or bool(gps_of(original)),
+          (sorted(before), gps_of(original)))
 
     normalized, vcard_type, mime = normalize_photo(original)
     after = exif_of(normalized)
     check('no EXIF in the result', not after, after)
-    check('no GPS block in the result', 0x8825 not in after, sorted(after))
+    check('no GPS block in the result', 0x8825 not in after and not gps_of(normalized),
+          (sorted(after), gps_of(normalized)))
     check('camera make gone from the bytes', b'TestCamera' not in normalized)
     check('camera model gone from the bytes', b'TestModel' not in normalized)
     check('type is JPEG', (vcard_type, mime) == ('JPEG', 'image/jpeg'), (vcard_type, mime))
