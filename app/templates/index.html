@@ -91,6 +91,10 @@
       padding:14px 18px; border-bottom:1px solid var(--border);
       transition:background .15s; cursor:pointer;
     }
+    /* [hidden] is display:none in the UA stylesheet but not !important, so
+       the display:flex above would otherwise keep the row visible. The live
+       filter toggles this attribute, so without the override it does nothing. */
+    .contact-item[hidden] { display:none; }
     .contact-item:last-child { border-bottom:none; }
     .contact-item:hover { background:var(--surface2); }
 
