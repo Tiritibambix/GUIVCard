@@ -101,7 +101,7 @@ def check(label, condition, detail=''):
     if condition:
         print(f"  ok   {label}")
     else:
-        print(f"  FAIL {label}" + (f" — {detail}" if detail else ''))
+        print(f"  FAIL {label}" + (" — [redacted]" if detail else ''))
         FAILURES.append(label)
 
 
